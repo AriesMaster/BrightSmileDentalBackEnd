@@ -1,0 +1,17 @@
+﻿namespace BrightSmileDEntal.Models
+{
+    public class Profile
+    {
+        public int Id { get; set; }
+
+        public int UserId { get; set; }
+        public User User { get; set; } = null!;
+
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+
+        public DateTime? DateOfBirth { get; set; }
+        public string Gender { get; set; } = string.Empty;
+    }
+}
