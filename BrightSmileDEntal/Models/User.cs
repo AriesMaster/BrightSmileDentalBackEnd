@@ -1,5 +1,4 @@
-﻿using static System.Runtime.InteropServices.JavaScript.JSType;
-
+﻿
 namespace BrightSmileDEntal.Models
 {
     public class User
