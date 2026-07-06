@@ -1,5 +1,5 @@
 ﻿using BrightSmileDEntal.Data;
-using BrightSmileDEntal.DTOs;
+using BrightSmileDEntal.DTOs.Auth;
 using BrightSmileDEntal.Models;
 using BrightSmileDEntal.Services;
 using Microsoft.AspNetCore.Mvc;
