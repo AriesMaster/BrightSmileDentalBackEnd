@@ -18,6 +18,8 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Register application services. JwtService is a scoped service used to create/validate tokens.
 builder.Services.AddScoped<JwtService>();
+// EmailService for sending password reset and other transactional emails
+builder.Services.AddScoped<EmailService>();
 
 // Configure CORS to allow requests from the Angular development server.
 // The named policy can be applied globally or per-controller.
