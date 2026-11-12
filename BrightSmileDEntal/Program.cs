@@ -21,19 +21,20 @@ builder.Services.AddScoped<JwtService>();
 // EmailService for sending password reset and other transactional emails
 builder.Services.AddScoped<EmailService>();
 
-// Configure CORS to allow requests from the Angular development server.
-// The named policy can be applied globally or per-controller.
+// Configure CORS to allow the Angular development server and deployed Netlify frontend.
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngularApp",
-        policy =>
-        {
-            policy
-                .WithOrigins("http://localhost:4200")
-                .AllowAnyHeader()
-                .AllowAnyMethod()
-                .AllowCredentials();
-        });
+    options.AddPolicy("AllowAngularApp", policy =>
+    {
+        policy
+            .WithOrigins(
+                "http://localhost:4200",
+                "https://brightsmiledentalfrontend.netlify.app"
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
 });
 
 // Read the symmetric signing key for JWTs from configuration.
