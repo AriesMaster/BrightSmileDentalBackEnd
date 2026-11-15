@@ -1,12 +1,13 @@
-﻿using BrightSmileDEntal.Data;
+﻿
+using BrightSmileDEntal.Constants;
+using BrightSmileDEntal.Data;
 using BrightSmileDEntal.DTOs.Auth;
 using BrightSmileDEntal.Models;
 using BrightSmileDEntal.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
-using Microsoft.Extensions.Configuration;
-using System;
+using System.Text;
 
 namespace BrightSmileDEntal.Controllers
 {
@@ -18,119 +19,236 @@ namespace BrightSmileDEntal.Controllers
         private readonly JwtService _jwt;
         private readonly EmailService _email;
         private readonly IConfiguration _config;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(ApplicationDbContext context, JwtService jwt, EmailService email, IConfiguration config)
+        public AuthController(
+            ApplicationDbContext context,
+            JwtService jwt,
+            EmailService email,
+            IConfiguration config,
+            ILogger<AuthController> logger)
         {
             _context = context;
             _jwt = jwt;
             _email = email;
             _config = config;
+            _logger = logger;
         }
 
+        // --------------------------------------------------
         // REGISTER
+        // Public registration always creates a Patient.
+        // Admin and Dentist accounts must be created through
+        // an authorized administrative workflow.
+        // --------------------------------------------------
+
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterDto dto)
         {
-            // check if email exists
-            if (await _context.Users.AnyAsync(x => x.Email == dto.Email))
+            var email = dto.Email.Trim().ToLowerInvariant();
+
+            var emailExists = await _context.Users
+                .AnyAsync(x => x.Email.ToLower() == email);
+
+            if (emailExists)
             {
-                return BadRequest("Email already exists.");
+                return BadRequest(new
+                {
+                    message = "Email already exists."
+                });
             }
 
-            // create user
             var user = new User
             {
-                Email = dto.Email,
+                Email = email,
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
-                Role = dto.Role
+                Role = UserRoles.Patient
             };
 
             _context.Users.Add(user);
+
             await _context.SaveChangesAsync();
 
-            return Ok("User registered successfully.");
+            _logger.LogInformation(
+                "New patient account registered: {Email}",
+                email
+            );
+
+            return Ok(new
+            {
+                message = "User registered successfully."
+            });
         }
 
-        // FORGOT PASSWORD - sends a reset link to the user's email if it exists
+        // --------------------------------------------------
+        // FORGOT PASSWORD
+        // Generates a secure, single-use password reset token.
+        // Only the hashed token is stored in the database.
+        // --------------------------------------------------
+
         [HttpPost("forgot-password")]
-        public async Task<IActionResult> ForgotPassword(PasswordResetRequestDto dto)
+        public async Task<IActionResult> ForgotPassword(
+            PasswordResetRequestDto dto)
         {
+            var email = dto.Email.Trim().ToLowerInvariant();
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == email);
 
-            // Do not reveal whether the email exists; return OK regardless to avoid account enumeration.
+            // Prevent account enumeration.
             if (user == null)
-                return Ok("If that email exists, a password reset link has been sent.");
+            {
+                return Ok(
+                    "If that email exists, a password reset link has been sent."
+                );
+            }
 
-            // generate a random token
-            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-            user.ResetToken = token;
+            // Generate a cryptographically secure random token.
+            var token = Convert.ToBase64String(
+                RandomNumberGenerator.GetBytes(64)
+            );
+
+            // Store only the SHA-256 hash of the token.
+            user.ResetToken = HashResetToken(token);
             user.ResetTokenExpiry = DateTime.UtcNow.AddHours(1);
 
             await _context.SaveChangesAsync();
 
-            // Build reset link: client handles token via route like /reset-password?token=...
-            var clientUrl = _config["App:ClientUrl"] ?? "http://localhost:4200";
-            var resetLink = $"{clientUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(token)}";
+            // Build frontend reset link.
+            var clientUrl = _config["App:ClientUrl"]
+                ?? "http://localhost:4200";
+
+            var resetLink =
+                $"{clientUrl.TrimEnd('/')}/reset-password?token={Uri.EscapeDataString(token)}";
 
             var subject = "Password reset request";
-            var body = $"<p>Click the link below to reset your password. The link will expire in 1 hour.</p>" +
-                       $"<p><a href=\"{resetLink}\">Reset your password</a></p>";
+
+            var body =
+                "<p>Click the link below to reset your password. " +
+                "The link will expire in 1 hour.</p>" +
+                $"<p><a href=\"{resetLink}\">Reset your password</a></p>";
 
             try
             {
                 _email.SendEmail(user.Email, subject, body);
+
+                _logger.LogInformation(
+                    "Password reset email sent for {Email}",
+                    email
+                );
             }
-            catch
+            catch (Exception ex)
             {
-                // Log or handle the email failure as needed. Still return OK to the caller.
+                _logger.LogError(
+                    ex,
+                    "Failed to send password reset email for {Email}",
+                    email
+                );
             }
 
-            return Ok("If that email exists, a password reset link has been sent.");
+            return Ok(
+                "If that email exists, a password reset link has been sent."
+            );
         }
 
-        // RESET PASSWORD - accepts token and new password
+        // --------------------------------------------------
+        // RESET PASSWORD
+        // Validates the reset token and updates the password.
+        // --------------------------------------------------
+
         [HttpPost("reset-password")]
-        public async Task<IActionResult> ResetPassword(ResetPasswordDto dto)
+        public async Task<IActionResult> ResetPassword(
+            ResetPasswordDto dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Token) || string.IsNullOrWhiteSpace(dto.NewPassword))
-                return BadRequest("Invalid token or password.");
+            if (string.IsNullOrWhiteSpace(dto.Token) ||
+                string.IsNullOrWhiteSpace(dto.NewPassword))
+            {
+                return BadRequest(new
+                {
+                    message = "Invalid token or password."
+                });
+            }
 
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.ResetToken == dto.Token);
+            // Hash the supplied token before database lookup.
+            var hashedToken = HashResetToken(dto.Token);
 
-            if (user == null || user.ResetTokenExpiry == null || user.ResetTokenExpiry < DateTime.UtcNow)
-                return BadRequest("Invalid or expired token.");
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.ResetToken == hashedToken);
 
-            // update password and clear token
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            if (user == null ||
+                user.ResetTokenExpiry == null ||
+                user.ResetTokenExpiry <= DateTime.UtcNow)
+            {
+                return BadRequest(new
+                {
+                    message = "Invalid or expired token."
+                });
+            }
+
+            // Hash the new password.
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(
+                dto.NewPassword
+            );
+
+            // Invalidate the reset token after successful use.
             user.ResetToken = null;
             user.ResetTokenExpiry = null;
 
             await _context.SaveChangesAsync();
 
-            return Ok("Password has been reset successfully.");
+            _logger.LogInformation(
+                "Password successfully reset for {Email}",
+                user.Email
+            );
+
+            return Ok(new
+            {
+                message = "Password has been reset successfully."
+            });
         }
 
-
+        // --------------------------------------------------
         // LOGIN
+        // Authenticates the user and generates a JWT.
+        // --------------------------------------------------
+
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
-            // find user
+            var email = dto.Email.Trim().ToLowerInvariant();
+
             var user = await _context.Users
-                .FirstOrDefaultAsync(x => x.Email == dto.Email);
+                .FirstOrDefaultAsync(x => x.Email.ToLower() == email);
 
             if (user == null)
-                return Unauthorized("Invalid credentials");
+            {
+                return Unauthorized(new
+                {
+                    message = "Invalid credentials."
+                });
+            }
 
-            // verify password
-            bool validPassword = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
+            var validPassword = BCrypt.Net.BCrypt.Verify(
+                dto.Password,
+                user.PasswordHash
+            );
 
             if (!validPassword)
-                return Unauthorized("Invalid credentials");
+            {
+                return Unauthorized(new
+                {
+                    message = "Invalid credentials."
+                });
+            }
 
-            // generate JWT token
+            // Generate JWT containing user identity and role.
             var token = _jwt.GenerateToken(user);
+
+            _logger.LogInformation(
+                "User authenticated successfully: {Email}, Role: {Role}",
+                user.Email,
+                user.Role
+            );
 
             return Ok(new
             {
@@ -138,6 +256,19 @@ namespace BrightSmileDEntal.Controllers
                 email = user.Email,
                 role = user.Role
             });
+        }
+
+        // --------------------------------------------------
+        // HELPER METHODS
+        // --------------------------------------------------
+
+        private static string HashResetToken(string token)
+        {
+            var tokenBytes = Encoding.UTF8.GetBytes(token);
+
+            var hashBytes = SHA256.HashData(tokenBytes);
+
+            return Convert.ToHexString(hashBytes);
         }
     }
 }

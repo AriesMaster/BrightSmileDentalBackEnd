@@ -1,3 +1,4 @@
+
 using BrightSmileDEntal.Data;
 using BrightSmileDEntal.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -5,23 +6,33 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
-// Create the application builder which holds configuration, logging and DI container
 var builder = WebApplication.CreateBuilder(args);
 
-// Register MVC controller support (API endpoints)
+//  SERVICES
+
+// Register MVC controllers.
 builder.Services.AddControllers();
 
-// Register the EF Core DbContext with a PostgreSQL provider.
-// Connection string is read from configuration (appsettings.json or environment).
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Register PostgreSQL database context.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// Register application services. JwtService is a scoped service used to create/validate tokens.
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "Database connection string 'DefaultConnection' is missing."
+    );
+}
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+// Register application services.
 builder.Services.AddScoped<JwtService>();
-// EmailService for sending password reset and other transactional emails
 builder.Services.AddScoped<EmailService>();
 
-// Configure CORS to allow the Angular development server and deployed Netlify frontend.
+// CORS CONFIGURATION
+
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngularApp", policy =>
@@ -32,64 +43,145 @@ builder.Services.AddCors(options =>
                 "https://brightsmiledentalfrontend.netlify.app"
             )
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+            .AllowAnyMethod();
     });
 });
 
-// Read the symmetric signing key for JWTs from configuration.
+// --------------------------------------------------
+// 3. JWT AUTHENTICATION
+// --------------------------------------------------
+
+// Retrieve and validate JWT configuration.
 var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
 
-// Configure JWT bearer authentication. Tokens will be validated for issuer, audience,
-// lifetime and signing key. Make sure the Jwt:Issuer, Jwt:Audience, and Jwt:Key values
-// are set in configuration for both token creation and validation.
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    throw new InvalidOperationException(
+        "JWT signing key is missing from configuration."
+    );
+}
+
+if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
+{
+    throw new InvalidOperationException(
+        "JWT signing key must contain at least 32 bytes."
+    );
+}
+
+if (string.IsNullOrWhiteSpace(jwtIssuer))
+{
+    throw new InvalidOperationException(
+        "JWT issuer is missing from configuration."
+    );
+}
+
+if (string.IsNullOrWhiteSpace(jwtAudience))
+{
+    throw new InvalidOperationException(
+        "JWT audience is missing from configuration."
+    );
+}
+
+builder.Services.AddAuthentication(
+    JwtBearerDefaults.AuthenticationScheme
+)
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtKey!)
-            )
-        };
-    });
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
 
-// Add authorization services (policy-based or role-based can be added later)
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.FromMinutes(1),
+
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtKey)
+        )
+    };
+});
+
+// --------------------------------------------------
+// 4. AUTHORIZATION
+// --------------------------------------------------
+
 builder.Services.AddAuthorization();
 
-// Swagger/OpenAPI tools for API documentation and testing (enabled in Development)
+// --------------------------------------------------
+// 5. SWAGGER / OPENAPI
+// --------------------------------------------------
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Build the application pipeline
+// --------------------------------------------------
+// 6. BUILD APPLICATION
+// --------------------------------------------------
+
 var app = builder.Build();
 
-// In Development environment enable Swagger UI for interactive API exploration
+// --------------------------------------------------
+// 7. DATABASE MIGRATIONS AND DEMO SEEDING
+// --------------------------------------------------
+
+if (app.Environment.IsDevelopment())
+{
+    app.Logger.LogInformation(
+        "Starting database migration and demo user seeding."
+    );
+
+    try
+    {
+        using var scope = app.Services.CreateScope();
+
+        var context = scope.ServiceProvider
+            .GetRequiredService<ApplicationDbContext>();
+
+        await context.Database.MigrateAsync();
+
+        await DbSeeder.SeedDemoUsersAsync(
+            context,
+            app.Logger
+        );
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogCritical(
+            ex,
+            "Database migration or demo user seeding failed."
+        );
+
+        throw;
+    }
+}
+
+//HTTP REQUEST PIPELINE
+
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// Redirect HTTP requests to HTTPS
 app.UseHttpsRedirection();
 
-// Apply CORS policy. Place before authentication if CORS preflight requests need to be handled
-// without requiring credentials or authentication.
 app.UseCors("AllowAngularApp");
 
-// Enable authentication and authorization middleware
 app.UseAuthentication();
+
 app.UseAuthorization();
 
-// Map controller routes to endpoints
+// Map controller endpoints.
 app.MapControllers();
 
-// Start the web application
+//  START APPLICATION
+
+
 app.Run();
