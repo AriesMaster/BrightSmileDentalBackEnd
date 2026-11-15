@@ -1,53 +1,97 @@
-﻿using BrightSmileDEntal.Constants;
+﻿
+using BrightSmileDEntal.Constants;
 using BrightSmileDEntal.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace BrightSmileDEntal.Data
 {
     public static class DbSeeder
     {
-        public static async Task SeedDemoUsersAsync(ApplicationDbContext context, ILogger logger)
+        public static async Task SeedDemoUsersAsync(
+            ApplicationDbContext context,
+            ILogger logger)
         {
             logger.LogInformation("Demo user seeding started.");
 
             var demoUsers = new[]
             {
-                new { Email = "admin@brightsmile.com", Password = "Demo@1234", Role = UserRoles.Admin },
-                new { Email = "dentist@brightsmile.com", Password = "Demo@1234", Role = UserRoles.Dentist },
-                new { Email = "patient@brightsmile.com", Password = "Demo@1234", Role = UserRoles.Patient }
+                new
+                {
+                    Email = "admin@brightsmile.com",
+                    Password = "Demo@1234",
+                    Role = UserRoles.Admin
+                },
+                new
+                {
+                    Email = "dentist@brightsmile.com",
+                    Password = "Demo@1234",
+                    Role = UserRoles.Dentist
+                },
+                new
+                {
+                    Email = "patient@brightsmile.com",
+                    Password = "Demo@1234",
+                    Role = UserRoles.Patient
+                }
             };
 
-            var anyChanged = false;
+            var hasChanges = false;
 
             foreach (var demo in demoUsers)
             {
-                var user = await context.Users.SingleOrDefaultAsync(u => u.Email == demo.Email);
+                var user = await context.Users
+                    .SingleOrDefaultAsync(u => u.Email == demo.Email);
 
-                if (user is null)
+                if (user == null)
                 {
-                    context.Users.Add(new User
+                    user = new User
                     {
                         Email = demo.Email,
-                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(demo.Password),
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(
+                            demo.Password
+                        ),
                         Role = demo.Role
-                    });
+                    };
 
-                    anyChanged = true;
-                    logger.LogInformation("Added demo user {Email} with role {Role}.", demo.Email, demo.Role);
+                    context.Users.Add(user);
+                    hasChanges = true;
+
+                    logger.LogInformation(
+                        "Created demo user {Email} with role {Role}.",
+                        demo.Email,
+                        demo.Role
+                    );
+
                     continue;
                 }
 
-                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(demo.Password);
-                user.Role = demo.Role;
-                anyChanged = true;
-                logger.LogInformation("Refreshed credentials for demo user {Email}.", demo.Email);
+                // Correct the role only when necessary.
+                if (user.Role != demo.Role)
+                {
+                    user.Role = demo.Role;
+                    hasChanges = true;
+
+                    logger.LogInformation(
+                        "Updated role for demo user {Email} to {Role}.",
+                        demo.Email,
+                        demo.Role
+                    );
+                }
             }
 
-            if (anyChanged)
+            if (hasChanges)
             {
                 await context.SaveChangesAsync();
-                logger.LogInformation("Demo users saved successfully.");
+
+                logger.LogInformation(
+                    "Demo user changes saved successfully."
+                );
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Demo users are already up to date. No changes required."
+                );
             }
 
             logger.LogInformation("Demo user seeding finished.");
