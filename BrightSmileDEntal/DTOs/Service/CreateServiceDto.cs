@@ -3,9 +3,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BrightSmileDEntal.DTOs.Service
 {
-    /// <summary>
-    /// Defines the information required to create a dental service.
-    /// </summary>
     public class CreateServiceDto
     {
         [Required]
