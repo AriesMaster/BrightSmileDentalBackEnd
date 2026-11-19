@@ -17,10 +17,16 @@ namespace BrightSmileDEntal.Controllers
     {
         private readonly ApplicationDbContext _context;
 
+        private const int AppointmentDurationMinutes = 30;
+
         public AppointmentsController(ApplicationDbContext context)
         {
             _context = context;
         }
+
+        // -----------------------------------------------
+        // CURRENT USER
+        // -----------------------------------------------
 
         private int? CurrentUserId
         {
@@ -38,10 +44,15 @@ namespace BrightSmileDEntal.Controllers
         private bool IsAdmin =>
             User.IsInRole(UserRoles.Admin);
 
+        // -----------------------------------------------
+        // VALIDATION HELPERS
+        // -----------------------------------------------
+
         private static bool IsValidDate(DateTime date)
         {
             return date.Kind == DateTimeKind.Utc
-                && date > DateTime.UtcNow;
+                && date > DateTime.UtcNow
+                && date <= DateTime.UtcNow.AddYears(2);
         }
 
         private static bool IsActive(string status)
@@ -50,19 +61,47 @@ namespace BrightSmileDEntal.Controllers
                 || status == "Confirmed";
         }
 
+        // -----------------------------------------------
+        // POSTGRESQL BOOKING LOCK
+        // Must be called inside an active transaction.
+        // Serializes booking changes for each dentist.
+        // -----------------------------------------------
+
+        private async Task LockDentistSchedule(int doctorId)
+        {
+            await _context.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT pg_advisory_xact_lock(48291, {doctorId})");
+        }
+
+        // -----------------------------------------------
+        // APPOINTMENT CONFLICT CHECK
+        // Every appointment occupies 30 minutes.
+        // -----------------------------------------------
+
         private async Task<bool> HasConflict(
             int doctorId,
             DateTime appointmentDate,
             int? excludeAppointmentId = null)
         {
+            var appointmentEnd = appointmentDate
+                .AddMinutes(AppointmentDurationMinutes);
+
+            var earliestConflictingStart = appointmentDate
+                .AddMinutes(-AppointmentDurationMinutes);
+
             return await _context.Appointments.AnyAsync(a =>
                 a.DoctorId == doctorId
-                && a.AppointmentDate == appointmentDate
                 && (a.Status == "Pending"
                     || a.Status == "Confirmed")
+                && a.AppointmentDate > earliestConflictingStart
+                && a.AppointmentDate < appointmentEnd
                 && (!excludeAppointmentId.HasValue
                     || a.Id != excludeAppointmentId.Value));
         }
+
+        // -----------------------------------------------
+        // QUERY HELPERS
+        // -----------------------------------------------
 
         private IQueryable<Appointment> AppointmentQuery()
         {
@@ -113,8 +152,11 @@ namespace BrightSmileDEntal.Controllers
             };
         }
 
-        // GET: api/Appointments
-        // Admin only
+        // -----------------------------------------------
+        // GET ALL APPOINTMENTS
+        // ADMIN ONLY
+        // -----------------------------------------------
+
         [HttpGet]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -127,8 +169,10 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // GET: api/Appointments/me
-        // Patient only
+        // -----------------------------------------------
+        // GET PATIENT APPOINTMENTS
+        // -----------------------------------------------
+
         [HttpGet("me")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -147,8 +191,10 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // GET: api/Appointments/dentist/me
-        // Dentist only
+        // -----------------------------------------------
+        // GET DENTIST APPOINTMENTS
+        // -----------------------------------------------
+
         [HttpGet("dentist/me")]
         [Authorize(Roles = UserRoles.Dentist)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -167,7 +213,10 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // GET: api/Appointments/5
+        // -----------------------------------------------
+        // GET APPOINTMENT BY ID
+        // -----------------------------------------------
+
         [HttpGet("{id:int}")]
         public async Task<ActionResult<AppointmentDto>>
             GetAppointment(int id)
@@ -181,10 +230,12 @@ namespace BrightSmileDEntal.Controllers
                 .FirstOrDefaultAsync(a => a.Id == id);
 
             if (appointment == null)
+            {
                 return NotFound(new
                 {
                     message = "Appointment not found."
                 });
+            }
 
             if (!IsAdmin
                 && appointment.PatientId != userId.Value
@@ -196,7 +247,11 @@ namespace BrightSmileDEntal.Controllers
             return Ok(MapToDto(appointment));
         }
 
-        // POST: api/Appointments
+        // -----------------------------------------------
+        // CREATE APPOINTMENT
+        // PATIENT ONLY
+        // -----------------------------------------------
+
         [HttpPost]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<AppointmentDto>>
@@ -213,7 +268,7 @@ namespace BrightSmileDEntal.Controllers
                 return BadRequest(new
                 {
                     message =
-                        "Appointment date must be a future UTC date."
+                        "Appointment date must be a future UTC date within two years."
                 });
             }
 
@@ -241,6 +296,12 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync();
+
+            // Prevent simultaneous bookings for this dentist.
+            await LockDentistSchedule(dto.DoctorId);
+
             if (await HasConflict(
                 dto.DoctorId,
                 dto.AppointmentDate))
@@ -248,7 +309,7 @@ namespace BrightSmileDEntal.Controllers
                 return Conflict(new
                 {
                     message =
-                        "The dentist already has an appointment at this time."
+                        "The dentist already has an appointment during this time."
                 });
             }
 
@@ -263,7 +324,9 @@ namespace BrightSmileDEntal.Controllers
             };
 
             _context.Appointments.Add(appointment);
+
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             var created = await AppointmentQuery()
                 .FirstAsync(a => a.Id == appointment.Id);
@@ -274,8 +337,11 @@ namespace BrightSmileDEntal.Controllers
                 MapToDto(created));
         }
 
-        // PUT: api/Appointments/5
-        // Patient reschedules their own appointment
+        // -----------------------------------------------
+        // RESCHEDULE APPOINTMENT
+        // PATIENT ONLY
+        // -----------------------------------------------
+
         [HttpPut("{id:int}")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<AppointmentDto>>
@@ -288,14 +354,45 @@ namespace BrightSmileDEntal.Controllers
             if (patientId == null)
                 return Unauthorized();
 
-            var appointment = await _context.Appointments
-                .FirstOrDefaultAsync(a => a.Id == id);
+            if (!IsValidDate(dto.AppointmentDate))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Appointment date must be a future UTC date within two years."
+                });
+            }
 
-            if (appointment == null)
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync();
+
+            // Read the dentist ID before acquiring the lock.
+            var doctorId = await _context.Appointments
+                .Where(a => a.Id == id)
+                .Select(a => (int?)a.DoctorId)
+                .FirstOrDefaultAsync();
+
+            if (doctorId == null)
+            {
                 return NotFound(new
                 {
                     message = "Appointment not found."
                 });
+            }
+
+            await LockDentistSchedule(doctorId.Value);
+
+            // Reload after locking to obtain the latest status.
+            var appointment = await _context.Appointments
+                .FirstOrDefaultAsync(a => a.Id == id);
+
+            if (appointment == null)
+            {
+                return NotFound(new
+                {
+                    message = "Appointment not found."
+                });
+            }
 
             if (appointment.PatientId != patientId.Value)
                 return Forbid();
@@ -309,15 +406,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            if (!IsValidDate(dto.AppointmentDate))
-            {
-                return BadRequest(new
-                {
-                    message =
-                        "Appointment date must be a future UTC date."
-                });
-            }
-
             if (await HasConflict(
                 appointment.DoctorId,
                 dto.AppointmentDate,
@@ -326,7 +414,7 @@ namespace BrightSmileDEntal.Controllers
                 return Conflict(new
                 {
                     message =
-                        "The dentist already has an appointment at this time."
+                        "The dentist already has an appointment during this time."
                 });
             }
 
@@ -335,6 +423,7 @@ namespace BrightSmileDEntal.Controllers
                 dto.AdditionalInfo?.Trim();
 
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             var updated = await AppointmentQuery()
                 .FirstAsync(a => a.Id == id);
@@ -342,8 +431,11 @@ namespace BrightSmileDEntal.Controllers
             return Ok(MapToDto(updated));
         }
 
-        // PATCH: api/Appointments/5/status
-        // Dentist or Admin
+        // -----------------------------------------------
+        // UPDATE APPOINTMENT STATUS
+        // DENTIST OR ADMIN
+        // -----------------------------------------------
+
         [HttpPatch("{id:int}/status")]
         [Authorize(Roles =
             UserRoles.Dentist + "," + UserRoles.Admin)]
@@ -355,21 +447,6 @@ namespace BrightSmileDEntal.Controllers
 
             if (userId == null)
                 return Unauthorized();
-
-            var appointment = await _context.Appointments
-                .FirstOrDefaultAsync(a => a.Id == id);
-
-            if (appointment == null)
-                return NotFound(new
-                {
-                    message = "Appointment not found."
-                });
-
-            if (!IsAdmin
-                && appointment.DoctorId != userId.Value)
-            {
-                return Forbid();
-            }
 
             var status = dto.Status?.Trim();
 
@@ -384,12 +461,69 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync();
+
+            var doctorId = await _context.Appointments
+                .Where(a => a.Id == id)
+                .Select(a => (int?)a.DoctorId)
+                .FirstOrDefaultAsync();
+
+            if (doctorId == null)
+            {
+                return NotFound(new
+                {
+                    message = "Appointment not found."
+                });
+            }
+
+            await LockDentistSchedule(doctorId.Value);
+
+            var appointment = await _context.Appointments
+                .FirstOrDefaultAsync(a => a.Id == id);
+
+            if (appointment == null)
+            {
+                return NotFound(new
+                {
+                    message = "Appointment not found."
+                });
+            }
+
+            if (!IsAdmin
+                && appointment.DoctorId != userId.Value)
+            {
+                return Forbid();
+            }
+
             if (!IsActive(appointment.Status))
             {
                 return Conflict(new
                 {
                     message =
                         "This appointment can no longer be updated."
+                });
+            }
+
+            // Only pending appointments can be confirmed.
+            if (status == "Confirmed"
+                && appointment.Status != "Pending")
+            {
+                return Conflict(new
+                {
+                    message =
+                        "Only pending appointments can be confirmed."
+                });
+            }
+
+            // Require confirmation before completion.
+            if (status == "Completed"
+                && appointment.Status != "Confirmed")
+            {
+                return Conflict(new
+                {
+                    message =
+                        "Only confirmed appointments can be completed."
                 });
             }
 
@@ -404,7 +538,9 @@ namespace BrightSmileDEntal.Controllers
             }
 
             appointment.Status = status;
+
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return Ok(new
             {
@@ -414,8 +550,11 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // PATCH: api/Appointments/5/cancel
-        // Patient or Admin
+        // -----------------------------------------------
+        // CANCEL APPOINTMENT
+        // PATIENT OR ADMIN
+        // -----------------------------------------------
+
         [HttpPatch("{id:int}/cancel")]
         [Authorize(Roles =
             UserRoles.Patient + "," + UserRoles.Admin)]
@@ -426,14 +565,34 @@ namespace BrightSmileDEntal.Controllers
             if (userId == null)
                 return Unauthorized();
 
-            var appointment = await _context.Appointments
-                .FirstOrDefaultAsync(a => a.Id == id);
+            await using var transaction =
+                await _context.Database.BeginTransactionAsync();
 
-            if (appointment == null)
+            var doctorId = await _context.Appointments
+                .Where(a => a.Id == id)
+                .Select(a => (int?)a.DoctorId)
+                .FirstOrDefaultAsync();
+
+            if (doctorId == null)
+            {
                 return NotFound(new
                 {
                     message = "Appointment not found."
                 });
+            }
+
+            await LockDentistSchedule(doctorId.Value);
+
+            var appointment = await _context.Appointments
+                .FirstOrDefaultAsync(a => a.Id == id);
+
+            if (appointment == null)
+            {
+                return NotFound(new
+                {
+                    message = "Appointment not found."
+                });
+            }
 
             if (!IsAdmin
                 && appointment.PatientId != userId.Value)
@@ -451,7 +610,9 @@ namespace BrightSmileDEntal.Controllers
             }
 
             appointment.Status = "Cancelled";
+
             await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return Ok(new
             {
