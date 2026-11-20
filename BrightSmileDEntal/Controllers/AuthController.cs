@@ -6,6 +6,7 @@ using BrightSmileDEntal.Models;
 using BrightSmileDEntal.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -39,23 +40,12 @@ namespace BrightSmileDEntal.Controllers
         // REGISTER PATIENT
         // ==========================================
 
-        /// <summary>
-        /// Registers a new patient account and
-        /// creates the associated patient profile.
-        ///
-        /// Public registration always assigns
-        /// the Patient role.
-        /// </summary>
         [HttpPost("register")]
         public async Task<IActionResult> Register(
             [FromBody] RegisterDto dto)
         {
-            // --------------------------------------
-            // NORMALIZE ACCOUNT INFORMATION
-            // --------------------------------------
-
+            // Normalize registration details.
             var email = dto.Email.Trim().ToLowerInvariant();
-
             var firstName = dto.FirstName.Trim();
             var lastName = dto.LastName.Trim();
 
@@ -65,10 +55,7 @@ namespace BrightSmileDEntal.Controllers
             var gender =
                 dto.Gender?.Trim() ?? string.Empty;
 
-            // --------------------------------------
-            // VALIDATE PERSONAL INFORMATION
-            // --------------------------------------
-
+            // Validate personal information.
             if (firstName.Length < 2 ||
                 lastName.Length < 2)
             {
@@ -79,20 +66,28 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            if (dto.DateOfBirth.HasValue &&
-                dto.DateOfBirth.Value.Date > DateTime.UtcNow.Date)
+            // Normalize the date of birth to UTC.
+            // PostgreSQL timestamptz requires UTC DateTime values.
+            DateTime? dateOfBirth = null;
+
+            if (dto.DateOfBirth.HasValue)
             {
-                return BadRequest(new
+                dateOfBirth = DateTime.SpecifyKind(
+                    dto.DateOfBirth.Value.Date,
+                    DateTimeKind.Utc
+                );
+
+                if (dateOfBirth.Value.Date > DateTime.UtcNow.Date)
                 {
-                    message =
-                        "Date of birth cannot be in the future."
-                });
+                    return BadRequest(new
+                    {
+                        message =
+                            "Date of birth cannot be in the future."
+                    });
+                }
             }
 
-            // --------------------------------------
-            // CHECK FOR EXISTING EMAIL
-            // --------------------------------------
-
+            // Check whether the email already exists.
             var emailExists = await _context.Users
                 .AnyAsync(u => u.Email.ToLower() == email);
 
@@ -105,50 +100,30 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // --------------------------------------
-            // CREATE USER
-            // --------------------------------------
-
+            // Create the patient user.
             var user = new User
             {
                 Email = email,
 
                 PasswordHash =
-                    BCrypt.Net.BCrypt.HashPassword(
-                        dto.Password
-                    ),
+                    BCrypt.Net.BCrypt.HashPassword(dto.Password),
 
                 Role = UserRoles.Patient
             };
 
-            // --------------------------------------
-            // CREATE PATIENT PROFILE
-            // --------------------------------------
-
+            // Create the associated profile.
             var profile = new Profile
             {
                 User = user,
-
                 FirstName = firstName,
                 LastName = lastName,
-
                 PhoneNumber = phoneNumber,
-
-                DateOfBirth = dto.DateOfBirth,
-
+                DateOfBirth = dateOfBirth,
                 Gender = gender
             };
 
-            // --------------------------------------
-            // SAVE USER AND PROFILE TOGETHER
-            // --------------------------------------
-
-            // EF Core tracks the related User
-            // through the Profile navigation.
-            //
-            // SaveChangesAsync inserts both
-            // records in one operation.
-
+            // EF Core tracks the relationship and saves
+            // the User and Profile in one transaction.
             _context.Profiles.Add(profile);
 
             try
@@ -156,35 +131,64 @@ namespace BrightSmileDEntal.Controllers
                 await _context.SaveChangesAsync();
             }
             catch (DbUpdateException ex)
+                when (ex.InnerException is PostgresException pgEx &&
+                      pgEx.SqlState == PostgresErrorCodes.UniqueViolation)
             {
-                // The database's unique email
-                // constraint protects against
-                // simultaneous registrations.
+                var pgError =
+                    (PostgresException)ex.InnerException!;
 
                 _logger.LogWarning(
                     ex,
-                    "Database rejected patient registration."
+                    "Unique constraint violation during registration. Constraint: {Constraint}",
+                    pgError.ConstraintName
                 );
+
+                if (pgError.ConstraintName == "IX_Users_Email")
+                {
+                    return Conflict(new
+                    {
+                        message =
+                            "An account with this email address already exists."
+                    });
+                }
 
                 return Conflict(new
                 {
                     message =
-                        "Unable to register this account. The email may already be in use."
+                        "Registration conflicts with an existing database record."
                 });
             }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Database error during patient registration."
+                );
 
-            // --------------------------------------
-            // LOG SUCCESSFUL REGISTRATION
-            // --------------------------------------
+                return StatusCode(500, new
+                {
+                    message =
+                        "Unable to complete registration due to a database error."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(
+                    ex,
+                    "Unexpected error during patient registration."
+                );
+
+                return StatusCode(500, new
+                {
+                    message =
+                        "An unexpected error occurred during registration."
+                });
+            }
 
             _logger.LogInformation(
                 "Patient account registered successfully. UserId: {UserId}",
                 user.Id
             );
-
-            // --------------------------------------
-            // RESPONSE
-            // --------------------------------------
 
             return Ok(new
             {
@@ -197,10 +201,6 @@ namespace BrightSmileDEntal.Controllers
         // FORGOT PASSWORD
         // ==========================================
 
-        /// <summary>
-        /// Generates a secure password reset token
-        /// and sends a reset link to the user.
-        /// </summary>
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword(
             PasswordResetRequestDto dto)
@@ -212,7 +212,7 @@ namespace BrightSmileDEntal.Controllers
                     u => u.Email.ToLower() == email
                 );
 
-            // Prevent account enumeration.
+            // Avoid revealing whether an account exists.
             if (user == null)
             {
                 return Ok(
@@ -220,13 +220,12 @@ namespace BrightSmileDEntal.Controllers
                 );
             }
 
-            // Generate a cryptographically
-            // secure random token.
+            // Generate a cryptographically secure token.
             var token = Convert.ToBase64String(
                 RandomNumberGenerator.GetBytes(64)
             );
 
-            // Store only the token hash.
+            // Store only the hashed token.
             user.ResetToken = HashResetToken(token);
 
             user.ResetTokenExpiry =
@@ -234,7 +233,7 @@ namespace BrightSmileDEntal.Controllers
 
             await _context.SaveChangesAsync();
 
-            // Build frontend reset link.
+            // Build the frontend reset link.
             var clientUrl =
                 _config["App:ClientUrl"]
                 ?? "http://localhost:4200";
@@ -280,10 +279,6 @@ namespace BrightSmileDEntal.Controllers
         // RESET PASSWORD
         // ==========================================
 
-        /// <summary>
-        /// Validates the reset token and
-        /// updates the user's password.
-        /// </summary>
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword(
             ResetPasswordDto dto)
@@ -315,7 +310,7 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Hash the new password.
+            // Update the password securely.
             user.PasswordHash =
                 BCrypt.Net.BCrypt.HashPassword(
                     dto.NewPassword
@@ -343,10 +338,6 @@ namespace BrightSmileDEntal.Controllers
         // LOGIN
         // ==========================================
 
-        /// <summary>
-        /// Authenticates a user and returns
-        /// a signed JWT.
-        /// </summary>
         [HttpPost("login")]
         public async Task<IActionResult> Login(
             LoginDto dto)
@@ -381,8 +372,7 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Generate JWT with user identity
-            // and role claims.
+            // Generate the JWT token.
             var token = _jwt.GenerateToken(user);
 
             _logger.LogInformation(
@@ -403,10 +393,6 @@ namespace BrightSmileDEntal.Controllers
         // HELPER METHODS
         // ==========================================
 
-        /// <summary>
-        /// Hashes a password reset token
-        /// using SHA-256.
-        /// </summary>
         private static string HashResetToken(
             string token)
         {
