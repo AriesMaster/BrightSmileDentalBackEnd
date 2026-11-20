@@ -21,9 +21,11 @@ namespace BrightSmileDEntal.Controllers
             _context = context;
         }
 
-        /// <summary>
-        /// Retrieves the profile associated with the authenticated user.
-        /// </summary>
+        // ==========================================
+        // GET CURRENT USER PROFILE
+        // GET /api/Profiles/me
+        // ==========================================
+
         [HttpGet("me")]
         public async Task<ActionResult<ProfileDto>> GetMyProfile()
         {
@@ -63,9 +65,11 @@ namespace BrightSmileDEntal.Controllers
             return Ok(profile);
         }
 
-        /// <summary>
-        /// Creates or updates the profile belonging to the authenticated user.
-        /// </summary>
+        // ==========================================
+        // CREATE OR UPDATE CURRENT USER PROFILE
+        // PUT /api/Profiles/me
+        // ==========================================
+
         [HttpPut("me")]
         public async Task<ActionResult<ProfileDto>> UpdateMyProfile(
             [FromBody] UpdateProfileDto dto)
@@ -80,6 +84,87 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
+            // ======================================
+            // VALIDATE PERSONAL INFORMATION
+            // ======================================
+
+            var firstName = dto.FirstName?.Trim()
+                ?? string.Empty;
+
+            var lastName = dto.LastName?.Trim()
+                ?? string.Empty;
+
+            var phoneNumber = dto.PhoneNumber?.Trim()
+                ?? string.Empty;
+
+            var gender = dto.Gender?.Trim()
+                ?? string.Empty;
+
+            if (firstName.Length < 2 ||
+                firstName.Length > 100)
+            {
+                return BadRequest(new
+                {
+                    message = "First name must contain between 2 and 100 characters."
+                });
+            }
+
+            if (lastName.Length < 2 ||
+                lastName.Length > 100)
+            {
+                return BadRequest(new
+                {
+                    message = "Last name must contain between 2 and 100 characters."
+                });
+            }
+
+            if (phoneNumber.Length > 20)
+            {
+                return BadRequest(new
+                {
+                    message = "Phone number cannot exceed 20 characters."
+                });
+            }
+
+            if (gender.Length > 30)
+            {
+                return BadRequest(new
+                {
+                    message = "Gender cannot exceed 30 characters."
+                });
+            }
+
+            // ======================================
+            // NORMALIZE DATE OF BIRTH TO UTC
+            // ======================================
+
+            DateTime? dateOfBirth = null;
+
+            if (dto.DateOfBirth.HasValue)
+            {
+                var suppliedDate = dto.DateOfBirth.Value;
+
+                // Date of birth represents a calendar date,
+                // not a time-of-day or timezone-specific event.
+                // Normalize the date for PostgreSQL timestamptz.
+                dateOfBirth = DateTime.SpecifyKind(
+                    suppliedDate.Date,
+                    DateTimeKind.Utc
+                );
+
+                if (dateOfBirth.Value.Date > DateTime.UtcNow.Date)
+                {
+                    return BadRequest(new
+                    {
+                        message = "Date of birth cannot be in the future."
+                    });
+                }
+            }
+
+            // ======================================
+            // VERIFY USER ACCOUNT
+            // ======================================
+
             var userExists = await _context.Users
                 .AnyAsync(u => u.Id == userId.Value);
 
@@ -91,12 +176,21 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
+            // ======================================
+            // RETRIEVE EXISTING PROFILE
+            // ======================================
+
             var profile = await _context.Profiles
-                .FirstOrDefaultAsync(p => p.UserId == userId.Value);
+                .FirstOrDefaultAsync(
+                    p => p.UserId == userId.Value
+                );
 
             var isNewProfile = profile == null;
 
-            // Create a profile when the account has no existing profile record.
+            // ======================================
+            // CREATE PROFILE IF MISSING
+            // ======================================
+
             if (profile == null)
             {
                 profile = new Profile
@@ -107,13 +201,25 @@ namespace BrightSmileDEntal.Controllers
                 _context.Profiles.Add(profile);
             }
 
-            profile.FirstName = dto.FirstName.Trim();
-            profile.LastName = dto.LastName.Trim();
-            profile.PhoneNumber = dto.PhoneNumber?.Trim() ?? string.Empty;
-            profile.DateOfBirth = dto.DateOfBirth;
-            profile.Gender = dto.Gender?.Trim() ?? string.Empty;
+            // ======================================
+            // UPDATE PROFILE FIELDS
+            // ======================================
+
+            profile.FirstName = firstName;
+            profile.LastName = lastName;
+            profile.PhoneNumber = phoneNumber;
+            profile.DateOfBirth = dateOfBirth;
+            profile.Gender = gender;
+
+            // ======================================
+            // SAVE CHANGES
+            // ======================================
 
             await _context.SaveChangesAsync();
+
+            // ======================================
+            // RETURN PROFILE DTO
+            // ======================================
 
             var result = new ProfileDto
             {
@@ -137,7 +243,10 @@ namespace BrightSmileDEntal.Controllers
             return Ok(result);
         }
 
-        // Resolve user identity from the validated JWT rather than request data.
+        // ==========================================
+        // JWT USER ID HELPER
+        // ==========================================
+
         private int? GetCurrentUserId()
         {
             var userIdClaim = User.FindFirstValue(
