@@ -20,10 +20,10 @@ namespace BrightSmileDEntal.Controllers
         private const int AppointmentDurationMinutes = 30;
 
         private static readonly TimeSpan OpeningTime =
-            new TimeSpan(9, 0, 0);
+            new(9, 0, 0);
 
         private static readonly TimeSpan ClosingTime =
-            new TimeSpan(17, 0, 0);
+            new(17, 0, 0);
 
         private static readonly TimeSpan SouthAfricaUtcOffset =
             TimeSpan.FromHours(2);
@@ -33,9 +33,9 @@ namespace BrightSmileDEntal.Controllers
             _context = context;
         }
 
-        // ===============================================
-        // CURRENT USER
-        // ===============================================
+        // ==========================================
+        // CURRENT USER AND AUTHORIZATION
+        // ==========================================
 
         private int? CurrentUserId
         {
@@ -53,9 +53,9 @@ namespace BrightSmileDEntal.Controllers
         private bool IsAdmin =>
             User.IsInRole(UserRoles.Admin);
 
-        // ===============================================
-        // DATE VALIDATION
-        // ===============================================
+        // ==========================================
+        // APPOINTMENT VALIDATION
+        // ==========================================
 
         private static bool IsValidDate(DateTime date)
         {
@@ -64,28 +64,17 @@ namespace BrightSmileDEntal.Controllers
                 && date <= DateTime.UtcNow.AddYears(2);
         }
 
-        // ===============================================
-        // OPERATING HOURS VALIDATION
-        //
-        // Monday to Friday
-        // 09:00 - 17:00 SAST (UTC+02:00)
-        // 30-minute appointment intervals
-        // Last appointment starts at 16:30
-        // ===============================================
-
         private static bool IsWithinOperatingHours(
             DateTime appointmentDate)
         {
             if (appointmentDate.Kind != DateTimeKind.Utc)
-            {
                 return false;
-            }
 
             // South Africa uses UTC+02:00 year-round.
             var southAfricanTime =
                 appointmentDate.Add(SouthAfricaUtcOffset);
 
-            // Block weekends.
+            // Monday to Friday only.
             if (southAfricanTime.DayOfWeek ==
                     DayOfWeek.Saturday ||
                 southAfricanTime.DayOfWeek ==
@@ -94,18 +83,17 @@ namespace BrightSmileDEntal.Controllers
                 return false;
             }
 
-            // Appointments must start at :00 or :30.
+            // Only :00 and :30 appointment starts.
             if (southAfricanTime.Minute != 0 &&
                 southAfricanTime.Minute != 30)
             {
                 return false;
             }
 
-            // Prevent appointments with extra seconds.
+            // No extra seconds or fractional seconds.
             if (southAfricanTime.Second != 0 ||
-                southAfricanTime.Millisecond != 0 ||
                 southAfricanTime.Ticks %
-                    TimeSpan.TicksPerMillisecond != 0)
+                    TimeSpan.TicksPerSecond != 0)
             {
                 return false;
             }
@@ -122,34 +110,26 @@ namespace BrightSmileDEntal.Controllers
                    appointmentEnd <= ClosingTime;
         }
 
-        // ===============================================
-        // ACTIVE APPOINTMENT STATUS
-        // ===============================================
-
         private static bool IsActive(string status)
         {
             return status == "Pending"
                 || status == "Confirmed";
         }
 
-        // ===============================================
+        // ==========================================
         // POSTGRESQL BOOKING LOCK
-        //
-        // Must run inside a transaction.
-        // Serializes booking changes per dentist.
-        // ===============================================
+        // ==========================================
 
         private async Task LockDentistSchedule(int doctorId)
         {
+            // Must be called within an active transaction.
             await _context.Database.ExecuteSqlInterpolatedAsync(
                 $"SELECT pg_advisory_xact_lock(48291, {doctorId})");
         }
 
-        // ===============================================
-        // APPOINTMENT CONFLICT CHECK
-        //
-        // Every appointment occupies 30 minutes.
-        // ===============================================
+        // ==========================================
+        // CONFLICT DETECTION
+        // ==========================================
 
         private async Task<bool> HasConflict(
             int doctorId,
@@ -173,9 +153,9 @@ namespace BrightSmileDEntal.Controllers
                     || a.Id != excludeAppointmentId.Value));
         }
 
-        // ===============================================
-        // APPOINTMENT QUERY
-        // ===============================================
+        // ==========================================
+        // QUERY AND MAPPING HELPERS
+        // ==========================================
 
         private IQueryable<Appointment> AppointmentQuery()
         {
@@ -188,16 +168,10 @@ namespace BrightSmileDEntal.Controllers
                 .Include(a => a.Service);
         }
 
-        // ===============================================
-        // USER DISPLAY NAME
-        // ===============================================
-
         private static string GetDisplayName(User user)
         {
             if (user.Profile == null)
-            {
                 return user.Email;
-            }
 
             var name = string.Join(" ",
                 new[]
@@ -211,10 +185,6 @@ namespace BrightSmileDEntal.Controllers
                 : name;
         }
 
-        // ===============================================
-        // MAP APPOINTMENT TO DTO
-        // ===============================================
-
         private static AppointmentDto MapToDto(
             Appointment appointment)
         {
@@ -222,29 +192,23 @@ namespace BrightSmileDEntal.Controllers
             {
                 Id = appointment.Id,
                 PatientId = appointment.PatientId,
-
                 PatientName = GetDisplayName(
                     appointment.Patient),
-
                 DoctorId = appointment.DoctorId,
-
                 DoctorName = GetDisplayName(
                     appointment.Doctor),
-
                 ServiceId = appointment.ServiceId,
                 ServiceName = appointment.Service.Name,
                 ServicePrice = appointment.Service.Price,
-
                 AppointmentDate = appointment.AppointmentDate,
                 Status = appointment.Status,
                 AdditionalInfo = appointment.AdditionalInfo
             };
         }
 
-        // ===============================================
-        // GET ALL APPOINTMENTS
-        // ADMIN ONLY
-        // ===============================================
+        // ==========================================
+        // GET ALL APPOINTMENTS - ADMIN
+        // ==========================================
 
         [HttpGet]
         [Authorize(Roles = UserRoles.Admin)]
@@ -258,9 +222,9 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // ===============================================
-        // GET PATIENT APPOINTMENTS
-        // ===============================================
+        // ==========================================
+        // GET MY APPOINTMENTS - PATIENT
+        // ==========================================
 
         [HttpGet("me")]
         [Authorize(Roles = UserRoles.Patient)]
@@ -270,9 +234,7 @@ namespace BrightSmileDEntal.Controllers
             var userId = CurrentUserId;
 
             if (userId == null)
-            {
                 return Unauthorized();
-            }
 
             var appointments = await AppointmentQuery()
                 .Where(a => a.PatientId == userId.Value)
@@ -282,9 +244,9 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // ===============================================
-        // GET DENTIST APPOINTMENTS
-        // ===============================================
+        // ==========================================
+        // GET MY APPOINTMENTS - DENTIST
+        // ==========================================
 
         [HttpGet("dentist/me")]
         [Authorize(Roles = UserRoles.Dentist)]
@@ -294,9 +256,7 @@ namespace BrightSmileDEntal.Controllers
             var userId = CurrentUserId;
 
             if (userId == null)
-            {
                 return Unauthorized();
-            }
 
             var appointments = await AppointmentQuery()
                 .Where(a => a.DoctorId == userId.Value)
@@ -306,9 +266,9 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // ===============================================
+        // ==========================================
         // GET APPOINTMENT BY ID
-        // ===============================================
+        // ==========================================
 
         [HttpGet("{id:int}")]
         public async Task<ActionResult<AppointmentDto>>
@@ -317,9 +277,7 @@ namespace BrightSmileDEntal.Controllers
             var userId = CurrentUserId;
 
             if (userId == null)
-            {
                 return Unauthorized();
-            }
 
             var appointment = await AppointmentQuery()
                 .FirstOrDefaultAsync(a => a.Id == id);
@@ -342,10 +300,137 @@ namespace BrightSmileDEntal.Controllers
             return Ok(MapToDto(appointment));
         }
 
-        // ===============================================
-        // CREATE APPOINTMENT
-        // PATIENT ONLY
-        // ===============================================
+        // ==========================================
+        // GET AVAILABLE APPOINTMENT SLOTS
+        //
+        // GET /api/Appointments/availability
+        //     ?doctorId=2&date=2026-11-23
+        //
+        // Returns available times in SAST:
+        // ["09:00", "09:30", "10:00", ...]
+        // ==========================================
+
+        [HttpGet("availability")]
+        [Authorize(Roles = UserRoles.Patient)]
+        public async Task<IActionResult> GetAvailableSlots(
+            [FromQuery] int doctorId,
+            [FromQuery] DateOnly date)
+        {
+            if (doctorId <= 0)
+            {
+                return BadRequest(new
+                {
+                    message = "Please select a valid dentist."
+                });
+            }
+
+            var doctorExists = await _context.Users
+                .AnyAsync(u =>
+                    u.Id == doctorId &&
+                    u.Role == UserRoles.Dentist);
+
+            if (!doctorExists)
+            {
+                return NotFound(new
+                {
+                    message = "Dentist not found."
+                });
+            }
+
+            var requestedDate =
+                date.ToDateTime(TimeOnly.MinValue);
+
+            var todaySast = DateTime.UtcNow
+                .Add(SouthAfricaUtcOffset)
+                .Date;
+
+            if (requestedDate < todaySast ||
+                requestedDate > todaySast.AddYears(2))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        "Select a date within the next two years."
+                });
+            }
+
+            // The dental practice is closed on weekends.
+            if (date.DayOfWeek == DayOfWeek.Saturday ||
+                date.DayOfWeek == DayOfWeek.Sunday)
+            {
+                return Ok(Array.Empty<string>());
+            }
+
+            // Convert the beginning of the SAST day to UTC.
+            var dayStartUtc = DateTime.SpecifyKind(
+                requestedDate.Subtract(
+                    SouthAfricaUtcOffset),
+                DateTimeKind.Utc);
+
+            var dayEndUtc = dayStartUtc.AddDays(1);
+
+            // Fetch active appointments for the dentist.
+            // Include bookings overlapping the day boundary.
+            var existingBookings = await _context.Appointments
+                .AsNoTracking()
+                .Where(a =>
+                    a.DoctorId == doctorId &&
+                    (a.Status == "Pending" ||
+                     a.Status == "Confirmed") &&
+                    a.AppointmentDate >
+                        dayStartUtc.AddMinutes(
+                            -AppointmentDurationMinutes) &&
+                    a.AppointmentDate < dayEndUtc)
+                .Select(a => a.AppointmentDate)
+                .ToListAsync();
+
+            var availableSlots = new List<string>();
+            var nowUtc = DateTime.UtcNow;
+
+            // Generate 09:00, 09:30 ... 16:30.
+            for (
+                var time = OpeningTime;
+                time.Add(TimeSpan.FromMinutes(
+                    AppointmentDurationMinutes)) <= ClosingTime;
+                time = time.Add(TimeSpan.FromMinutes(
+                    AppointmentDurationMinutes))
+            )
+            {
+                // Convert SAST slot to UTC.
+                var slotStartUtc = DateTime.SpecifyKind(
+                    requestedDate
+                        .Add(time)
+                        .Subtract(SouthAfricaUtcOffset),
+                    DateTimeKind.Utc);
+
+                // Do not return past slots.
+                if (slotStartUtc <= nowUtc)
+                    continue;
+
+                var slotEndUtc = slotStartUtc.AddMinutes(
+                    AppointmentDurationMinutes);
+
+                // Check for overlap with an existing booking.
+                var hasConflict = existingBookings.Any(
+                    bookedStart =>
+                        bookedStart < slotEndUtc &&
+                        bookedStart.AddMinutes(
+                            AppointmentDurationMinutes) >
+                            slotStartUtc);
+
+                if (!hasConflict)
+                {
+                    availableSlots.Add(
+                        time.ToString(@"hh\:mm"));
+                }
+            }
+
+            return Ok(availableSlots);
+        }
+
+        // ==========================================
+        // CREATE APPOINTMENT - PATIENT
+        // ==========================================
 
         [HttpPost]
         [Authorize(Roles = UserRoles.Patient)]
@@ -356,11 +441,8 @@ namespace BrightSmileDEntal.Controllers
             var patientId = CurrentUserId;
 
             if (patientId == null)
-            {
                 return Unauthorized();
-            }
 
-            // Validate future UTC date.
             if (!IsValidDate(dto.AppointmentDate))
             {
                 return BadRequest(new
@@ -370,7 +452,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Validate operating days and hours.
             if (!IsWithinOperatingHours(dto.AppointmentDate))
             {
                 return BadRequest(new
@@ -410,9 +491,10 @@ namespace BrightSmileDEntal.Controllers
             await using var transaction =
                 await _context.Database.BeginTransactionAsync();
 
-            // Prevent simultaneous bookings.
+            // Serialize bookings for this dentist.
             await LockDentistSchedule(dto.DoctorId);
 
+            // Recheck availability inside the transaction.
             if (await HasConflict(
                 dto.DoctorId,
                 dto.AppointmentDate))
@@ -448,10 +530,9 @@ namespace BrightSmileDEntal.Controllers
                 MapToDto(created));
         }
 
-        // ===============================================
-        // RESCHEDULE APPOINTMENT
-        // PATIENT ONLY
-        // ===============================================
+        // ==========================================
+        // RESCHEDULE APPOINTMENT - PATIENT
+        // ==========================================
 
         [HttpPut("{id:int}")]
         [Authorize(Roles = UserRoles.Patient)]
@@ -463,9 +544,7 @@ namespace BrightSmileDEntal.Controllers
             var patientId = CurrentUserId;
 
             if (patientId == null)
-            {
                 return Unauthorized();
-            }
 
             if (!IsValidDate(dto.AppointmentDate))
             {
@@ -476,7 +555,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Apply the same restrictions when rescheduling.
             if (!IsWithinOperatingHours(dto.AppointmentDate))
             {
                 return BadRequest(new
@@ -492,7 +570,6 @@ namespace BrightSmileDEntal.Controllers
             await using var transaction =
                 await _context.Database.BeginTransactionAsync();
 
-            // Read dentist ID before acquiring lock.
             var doctorId = await _context.Appointments
                 .Where(a => a.Id == id)
                 .Select(a => (int?)a.DoctorId)
@@ -508,7 +585,6 @@ namespace BrightSmileDEntal.Controllers
 
             await LockDentistSchedule(doctorId.Value);
 
-            // Reload after locking.
             var appointment = await _context.Appointments
                 .FirstOrDefaultAsync(a => a.Id == id);
 
@@ -521,9 +597,7 @@ namespace BrightSmileDEntal.Controllers
             }
 
             if (appointment.PatientId != patientId.Value)
-            {
                 return Forbid();
-            }
 
             if (appointment.Status != "Pending")
             {
@@ -559,10 +633,9 @@ namespace BrightSmileDEntal.Controllers
             return Ok(MapToDto(updated));
         }
 
-        // ===============================================
-        // UPDATE APPOINTMENT STATUS
-        // DENTIST OR ADMIN
-        // ===============================================
+        // ==========================================
+        // UPDATE STATUS - DENTIST OR ADMIN
+        // ==========================================
 
         [HttpPatch("{id:int}/status")]
         [Authorize(Roles =
@@ -574,9 +647,7 @@ namespace BrightSmileDEntal.Controllers
             var userId = CurrentUserId;
 
             if (userId == null)
-            {
                 return Unauthorized();
-            }
 
             var status = dto.Status?.Trim();
 
@@ -635,7 +706,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Only Pending appointments can be confirmed.
             if (status == "Confirmed"
                 && appointment.Status != "Pending")
             {
@@ -646,7 +716,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Require confirmation before completion.
             if (status == "Completed"
                 && appointment.Status != "Confirmed")
             {
@@ -657,7 +726,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Prevent completing future appointments.
             if (status == "Completed"
                 && appointment.AppointmentDate > DateTime.UtcNow)
             {
@@ -681,10 +749,9 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // ===============================================
-        // CANCEL APPOINTMENT
-        // PATIENT OR ADMIN
-        // ===============================================
+        // ==========================================
+        // CANCEL APPOINTMENT - PATIENT OR ADMIN
+        // ==========================================
 
         [HttpPatch("{id:int}/cancel")]
         [Authorize(Roles =
@@ -694,9 +761,7 @@ namespace BrightSmileDEntal.Controllers
             var userId = CurrentUserId;
 
             if (userId == null)
-            {
                 return Unauthorized();
-            }
 
             await using var transaction =
                 await _context.Database.BeginTransactionAsync();
