@@ -1,217 +1,241 @@
+# BrightSmile Dental | Backend API
 
+**ASP.NET Core 10 · C# · Entity Framework Core · PostgreSQL · JWT**
 
-# BrightSmile Dental Backend API
+A role-based REST API for a dental practice management system. BrightSmile Dental combines an Angular frontend with an ASP.NET Core backend to support patient accounts, dental services, appointment scheduling, and dentist/admin workflows.
 
-The BrightSmile Dental Backend is a RESTful Web API built using ASP.NET Core, designed to power a modern dental management system. It handles users, profiles, services, and appointments while connecting to a Supabase PostgreSQL database using Entity Framework Core.
+> **Project status:** Core backend features are implemented and have undergone manual local API testing. The project remains under active development; production deployment, complete end-to-end integration, and automated testing require further verification.
 
-This backend is designed to work with an Angular frontend, forming a full-stack dental management platform.
+**[Live Angular frontend](https://brightsmiledentalfrontend.netlify.app/)** · **[Frontend repository](https://github.com/AriesMaster/BrightSmileDentalFrontEnd)** · **[Portfolio](https://thabo.netlify.app/)**
 
----
+## Technical stack
 
-# Tech Stack
+| Layer | Technologies |
+| --- | --- |
+| API | C#, ASP.NET Core 10 Web API, REST, DTOs |
+| Data access | Entity Framework Core 10, Npgsql |
+| Database | Supabase PostgreSQL |
+| Security | JWT bearer authentication, role-based authorization, BCrypt |
+| API documentation | Swagger / OpenAPI |
+| Frontend | Angular, TypeScript, Angular Material |
+| Development tools | Visual Studio, Git, GitHub, Swagger UI |
 
-* ASP.NET Core Web API (.NET)
-* Entity Framework Core (Code First)
-* PostgreSQL (Supabase)
-* Swagger / OpenAPI
-* C#
-* RESTful Architecture
-
----
-
-# System Architecture
+## Architecture
 
 ```text
-Angular Frontend
-        ↓
+Angular SPA (Netlify / localhost:4200)
+             |
+             | HTTPS + JSON + Bearer JWT
+             v
 ASP.NET Core Web API
-        ↓
-Entity Framework Core (ORM)
-        ↓
-Supabase PostgreSQL Database
+  |-- AuthController          Registration, login, password reset
+  |-- UsersController         Current user identity
+  |-- ProfilesController      Profile read/update
+  |-- ServicesController      Public catalogue; Admin CRUD
+  |-- AppointmentsController  Booking and lifecycle operations
+  |
+  |-- DTOs and validation
+  |-- JWT authentication / role authorization
+  |-- EF Core DbContext and transactions
+             |
+             v
+Supabase PostgreSQL
+  Users -- Profiles
+  Users -- Appointments (Patient / Dentist)
+  Services -- Appointments
 ```
 
----
+The API uses controller-based endpoints, dependency injection, request/response DTOs, EF Core persistence, and role/ownership checks. It is **not** presented as a full Clean Architecture implementation.
 
-# Core Features
+## Implemented features
 
-## User Management
+### Authentication and account security
 
-* Register users (Admin, Doctor, Patient roles)
-* Secure password storage (hashed passwords)
-* Role-based system foundation
+- Patient registration with associated profile creation.
+- Login with BCrypt password verification and JWT issuance.
+- Roles: **Admin**, **Dentist**, and **Patient**.
+- JWT signature, issuer, audience, and lifetime validation.
+- Protected routes and resource-level authorization.
+- Forgot-password and reset-password endpoints using cryptographically generated tokens; only token hashes are stored, and tokens expire after one hour.
+- Database uniqueness constraint on user email, with conflict handling for duplicate registrations.
 
-## Profile Management
+**Verification note:** Password reset endpoints are implemented, but successful email delivery and the complete production reset journey have not been confirmed end-to-end.
 
-* User personal information
-* Contact details
-* One-to-one relationship with users
+### Profiles and dental services
 
-## Dental Services
+- Authenticated users can retrieve and update their own profiles.
+- Public dental service listing and service detail endpoints.
+- Admin-only create, update, and delete operations for services.
+- Validation for service names, descriptions, and prices.
+- Duplicate service-name checks and protection against deleting services referenced by appointments.
 
-* Create and manage dental services
-* Store service descriptions and pricing
+### Appointment management
 
-## Appointment System
+- Patients create bookings, view their own appointments, reschedule eligible bookings, and cancel active bookings.
+- Dentists view assigned appointments and manage permitted status transitions.
+- Admins can view appointments and perform authorized management actions.
+- Booking requests validate future **UTC** dates, dentist role, and selected service.
+- Appointments occupy **30-minute intervals**.
+- Pending and Confirmed bookings reserve a time slot; cancelled bookings release it.
+- Appointment status lifecycle: **Pending → Confirmed → Completed**, with cancellation of eligible active bookings.
 
-* Book appointments between patients and doctors
-* Track appointment status (Pending, Confirmed, Completed, Cancelled)
-* Link services to appointments
+#### Scheduling conflict prevention
 
----
+The API detects interval overlaps, not merely identical start times. For a dentist with an existing 09:00–09:30 appointment:
 
-# Database Design (Simplified)
+| Requested slot | Expected outcome |
+| --- | --- |
+| 09:15–09:45 | Rejected — overlaps |
+| 09:30–10:00 | Allowed — adjacent slot |
+| 09:00–09:30 after cancellation | Allowed — slot released |
 
-## Users
+Appointment creation, rescheduling, cancellation, and status updates use database transactions and PostgreSQL transaction-level **advisory locks scoped to the dentist** to coordinate schedule changes.
 
-* Id
-* Email
-* PasswordHash
-* Role
+**Verification note:** This logic is implemented and local conflict cases were manually tested; concurrent-load stress testing is still outstanding.
 
-## Profiles
+## API endpoints
 
-* Id
-* UserId
-* FirstName
-* LastName
-* PhoneNumber
+### Authentication and profile
 
-## Services
+| Method | Endpoint | Access |
+| --- | --- | --- |
+| POST | `/api/Auth/register` | Public — patient registration |
+| POST | `/api/Auth/login` | Public |
+| POST | `/api/Auth/forgot-password` | Public |
+| POST | `/api/Auth/reset-password` | Public |
+| GET | `/api/Users/me` | Authenticated |
+| GET | `/api/Profiles/me` | Authenticated |
+| PUT | `/api/Profiles/me` | Authenticated |
 
-* Id
-* Name
-* Description
-* Price
+### Dental services
 
-## Appointments
+| Method | Endpoint | Access |
+| --- | --- | --- |
+| GET | `/api/Services` | Public |
+| GET | `/api/Services/{id}` | Public |
+| POST | `/api/Services` | Admin |
+| PUT | `/api/Services/{id}` | Admin |
+| DELETE | `/api/Services/{id}` | Admin |
 
-* Id
-* PatientId
-* DoctorId
-* ServiceId
-* AppointmentDate
-* Status
-* AdditionalInfo
+### Appointments
 
----
+| Method | Endpoint | Access |
+| --- | --- | --- |
+| GET | `/api/Appointments` | Admin |
+| GET | `/api/Appointments/me` | Patient |
+| GET | `/api/Appointments/dentist/me` | Dentist |
+| GET | `/api/Appointments/{id}` | Authorized participant or Admin |
+| POST | `/api/Appointments` | Patient |
+| PUT | `/api/Appointments/{id}` | Patient — own eligible booking |
+| PATCH | `/api/Appointments/{id}/status` | Assigned Dentist or Admin |
+| PATCH | `/api/Appointments/{id}/cancel` | Patient (own booking) or Admin |
 
-# Setup Instructions
+Endpoints return appropriate HTTP results including `200`, `201`, `204`, `400`, `401`, `403`, `404`, and `409` depending on the operation and outcome.
 
-## 1. Clone Repository
+## Data model
+
+| Entity | Key fields / relationships |
+| --- | --- |
+| User | Email (unique), PasswordHash, Role, password-reset fields |
+| Profile | UserId (one-to-one with User), name, phone, date of birth, gender |
+| Service | Name, Description, Price |
+| Appointment | PatientId, DoctorId, ServiceId, AppointmentDate, Status, AdditionalInfo |
+
+Entity Framework Core manages relationships and migrations. Appointment patient and dentist foreign keys use restricted delete behavior to protect related records.
+
+## Local development
+
+### Prerequisites
+
+- .NET 10 SDK
+- PostgreSQL database (Supabase or local)
+- EF Core CLI tools (`dotnet-ef`)
+- A valid JWT signing key (at least 32 bytes)
+
+### 1. Clone and restore
 
 ```bash
-git clone https://github.com/your-username/BrightSmileDentalBackEnd.git
+git clone https://github.com/AriesMaster/BrightSmileDentalBackEnd.git
 cd BrightSmileDentalBackEnd
-```
-
----
-
-## 2. Restore Dependencies
-
-```bash
 dotnet restore
 ```
 
----
+Run the following commands from the directory containing the backend `.csproj` file.
 
-## 3. Configure Database
+### 2. Configure secrets
 
-Update your appsettings.json with your Supabase connection string:
-
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Host=YOUR_SUPABASE_HOST;Port=5432;Database=postgres;Username=postgres.xxx;Password=YOUR_PASSWORD;SSL Mode=Require;Trust Server Certificate=true"
-  }
-}
-```
-
----
-
-## 4. Run Entity Framework Migrations
+Use **.NET user secrets** or environment variables for credentials; do not commit a real database password or JWT key.
 
 ```bash
-dotnet ef migrations add InitialCreate
+dotnet user-secrets init
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=YOUR_HOST;Port=5432;Database=postgres;Username=YOUR_USER;Password=YOUR_PASSWORD;SSL Mode=Require"
+dotnet user-secrets set "Jwt:Key" "REPLACE_WITH_A_RANDOM_SECRET_OF_AT_LEAST_32_BYTES"
+dotnet user-secrets set "Jwt:Issuer" "BrightSmileDental"
+dotnet user-secrets set "Jwt:Audience" "BrightSmileDentalUsers"
+```
+
+For password-reset emails, configure the email service's required SMTP settings and `App:ClientUrl` for the Angular reset-password page.
+
+### 3. Apply migrations and run
+
+```bash
 dotnet ef database update
-```
-
----
-
-## 5. Run the API
-
-```bash
 dotnet run
 ```
 
----
+In **Development**, the application's startup code also applies pending EF Core migrations and seeds demo users if necessary. Swagger UI is enabled in Development:
 
-# API Documentation (Swagger)
-
-Once the application is running, open:
-
-```
-https://localhost:{PORT}/swagger
+```text
+https://localhost:<PORT>/swagger
 ```
 
-Swagger provides interactive API documentation for testing endpoints.
+Use the actual local port shown by `dotnet run`. In Swagger, authorize with the JWT returned by `POST /api/Auth/login` to test protected endpoints.
 
----
+**CORS:** The backend currently permits `http://localhost:4200` and `https://brightsmiledentalfrontend.netlify.app`.
 
-# Security Features
+## Testing and verification
 
-* Passwords stored using hashing (not plain text)
-* Secure PostgreSQL connection via Supabase SSL
-* Role-based system design (Admin, Doctor, Patient)
-* Backend-first architecture (Angular consumes API only)
+Core backend behavior was manually tested using Swagger UI during development (17–19 November 2026). These results are **manual local API checks**, not an automated test suite.
 
----
+| Scenario | Observed result |
+| --- | --- |
+| Admin and patient login | `200 OK` |
+| Service create / list / update | `201 / 200 / 200` |
+| Duplicate service name | `409 Conflict` |
+| Patient attempts Admin-only service creation | `403 Forbidden` |
+| Invalid negative service price | `400 Bad Request` |
+| Appointment creation | `201 Created` |
+| Overlapping booking | `409 Conflict` |
+| Adjacent 30-minute booking | `201 Created` |
+| Conflicting reschedule | `409 Conflict` |
+| Valid reschedule | `200 OK` |
+| Cancel and rebook released slot | `200 / 201` |
 
-# Project Status
+## Current status and roadmap
 
-## Completed
+**Implemented in the backend source**
+- JWT authentication, patient registration, password-reset endpoints, and user/profile APIs.
+- Public dental service reads and Admin-restricted service CRUD.
+- Appointment booking, retrieval, rescheduling, cancellation, and status transitions.
+- Role and ownership checks, DTO validation, EF Core persistence, and scheduling conflict prevention.
 
-* Project setup
-* EF Core configuration
-* Database design
-* Supabase connection setup
+**Further verification / planned improvements**
+- Verify the latest deployed backend and complete frontend-to-production-API integration.
+- Validate password-reset email delivery end-to-end.
+- Add automated unit and integration tests, concurrency tests, and broader authorization coverage.
+- Improve OpenAPI response metadata, production diagnostics, and deployment documentation.
+- Continue Angular Admin and Dentist dashboard integration and workflows.
 
-## In Progress
+## Related resources
 
-* Authentication system
-* User management APIs
-* Appointment endpoints
+- **Frontend:** https://github.com/AriesMaster/BrightSmileDentalFrontEnd
+- **Live frontend:** https://brightsmiledentalfrontend.netlify.app/
+- **Portfolio:** https://thabo.netlify.app/
+- **Backend documentation:** Available through the BrightSmile Dental case study on the portfolio.
 
-## Planned
+## Developer
 
-* JWT authentication
-* Angular frontend integration
-* Email notifications
-* Admin dashboard
-* Deployment to cloud (Azure / Render)
+**Thabo Tankiso Mavundza** — Junior Full-Stack Software Developer  
+C# · ASP.NET Core · Angular · TypeScript · SQL · PostgreSQL
 
----
-
-# Purpose of This Project
-
-This project is built for:
-
-* Learning full-stack development
-* Practicing clean architecture
-* Building a portfolio-ready system
-* Demonstrating real-world backend API design
-
----
-
-# Author
-
-AriesMaster
-
-Full-stack developer building real-world systems using ASP.NET Core and Angular.
-
----
-
-# License
-
-This project is intended for educational and portfolio purposes.
-
+Built as a portfolio project demonstrating practical API development, database modelling, authentication, authorization, and business-rule implementation.
