@@ -12,6 +12,9 @@ using System.Text;
 
 namespace BrightSmileDEntal.Controllers
 {
+    /// <summary>
+    /// Handles patient registration, authentication, and password recovery.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class AuthController : ControllerBase
@@ -22,6 +25,14 @@ namespace BrightSmileDEntal.Controllers
         private readonly IConfiguration _config;
         private readonly ILogger<AuthController> _logger;
 
+        /// <summary>
+        /// Initializes the authentication controller.
+        /// </summary>
+        /// <param name="context">The application database context.</param>
+        /// <param name="jwt">The service responsible for issuing JWTs.</param>
+        /// <param name="email">The service used to send password reset emails.</param>
+        /// <param name="config">Application configuration.</param>
+        /// <param name="logger">The authentication controller logger.</param>
         public AuthController(
             ApplicationDbContext context,
             JwtService jwt,
@@ -36,15 +47,21 @@ namespace BrightSmileDEntal.Controllers
             _logger = logger;
         }
 
-        // ==========================================
-        // REGISTER PATIENT
-        // ==========================================
 
+        /// <summary>
+        /// Registers a new patient account.
+        /// </summary>
+        /// <remarks>
+        /// Creates a patient user and associated profile. Email addresses are normalized and passwords are stored as BCrypt hashes.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="400">The request is invalid.</response>
+        /// <response code="409">An account or database record conflicts with the registration.</response>
+        /// <response code="500">Registration could not be completed.</response>
         [HttpPost("register")]
         public async Task<IActionResult> Register(
             [FromBody] RegisterDto dto)
         {
-            // Normalize registration details.
             var email = dto.Email.Trim().ToLowerInvariant();
             var firstName = dto.FirstName.Trim();
             var lastName = dto.LastName.Trim();
@@ -55,7 +72,6 @@ namespace BrightSmileDEntal.Controllers
             var gender =
                 dto.Gender?.Trim() ?? string.Empty;
 
-            // Validate personal information.
             if (firstName.Length < 2 ||
                 lastName.Length < 2)
             {
@@ -87,7 +103,6 @@ namespace BrightSmileDEntal.Controllers
                 }
             }
 
-            // Check whether the email already exists.
             var emailExists = await _context.Users
                 .AnyAsync(u => u.Email.ToLower() == email);
 
@@ -100,7 +115,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Create the patient user.
             var user = new User
             {
                 Email = email,
@@ -111,7 +125,6 @@ namespace BrightSmileDEntal.Controllers
                 Role = UserRoles.Patient
             };
 
-            // Create the associated profile.
             var profile = new Profile
             {
                 User = user,
@@ -122,8 +135,7 @@ namespace BrightSmileDEntal.Controllers
                 Gender = gender
             };
 
-            // EF Core tracks the relationship and saves
-            // the User and Profile in one transaction.
+            // EF Core persists the related user and profile in a single SaveChanges call.
             _context.Profiles.Add(profile);
 
             try
@@ -197,10 +209,15 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // ==========================================
-        // FORGOT PASSWORD
-        // ==========================================
 
+        /// <summary>
+        /// Requests a password reset link.
+        /// </summary>
+        /// <remarks>
+        /// Returns the same success message whether or not the email address belongs to an account. Reset tokens are cryptographically generated, stored as hashes, and expire after one hour. Email delivery failures are logged.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="400">The request is invalid.</response>
         [HttpPost("forgot-password")]
         public async Task<IActionResult> ForgotPassword(
             PasswordResetRequestDto dto)
@@ -212,7 +229,7 @@ namespace BrightSmileDEntal.Controllers
                     u => u.Email.ToLower() == email
                 );
 
-            // Avoid revealing whether an account exists.
+            // Use a generic response to avoid account enumeration.
             if (user == null)
             {
                 return Ok(
@@ -225,7 +242,7 @@ namespace BrightSmileDEntal.Controllers
                 RandomNumberGenerator.GetBytes(64)
             );
 
-            // Store only the hashed token.
+            // Persist only the token hash so a database leak does not expose usable reset links.
             user.ResetToken = HashResetToken(token);
 
             user.ResetTokenExpiry =
@@ -233,7 +250,6 @@ namespace BrightSmileDEntal.Controllers
 
             await _context.SaveChangesAsync();
 
-            // Build the frontend reset link.
             var clientUrl =
                 _config["App:ClientUrl"]
                 ?? "http://localhost:4200";
@@ -275,10 +291,15 @@ namespace BrightSmileDEntal.Controllers
             );
         }
 
-        // ==========================================
-        // RESET PASSWORD
-        // ==========================================
 
+        /// <summary>
+        /// Resets an account password using a valid reset token.
+        /// </summary>
+        /// <remarks>
+        /// The reset token must be unexpired. On success, the password is rehashed and the reset token is invalidated.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="400">The request is invalid.</response>
         [HttpPost("reset-password")]
         public async Task<IActionResult> ResetPassword(
             ResetPasswordDto dto)
@@ -310,7 +331,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Update the password securely.
             user.PasswordHash =
                 BCrypt.Net.BCrypt.HashPassword(
                     dto.NewPassword
@@ -334,10 +354,16 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // ==========================================
-        // LOGIN
-        // ==========================================
 
+        /// <summary>
+        /// Authenticates a user and issues a JWT.
+        /// </summary>
+        /// <remarks>
+        /// Returns a bearer token and the authenticated user's email and role when credentials are valid.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="400">The request is invalid.</response>
+        /// <response code="401">The credentials are invalid.</response>
         [HttpPost("login")]
         public async Task<IActionResult> Login(
             LoginDto dto)
@@ -372,7 +398,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // Generate the JWT token.
             var token = _jwt.GenerateToken(user);
 
             _logger.LogInformation(
@@ -389,9 +414,6 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // ==========================================
-        // HELPER METHODS
-        // ==========================================
 
         private static string HashResetToken(
             string token)
