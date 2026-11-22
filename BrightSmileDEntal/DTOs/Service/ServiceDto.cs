@@ -12,27 +12,18 @@ namespace BrightSmileDEntal.DTOs.Service
         public int Id { get; set; }
 
         /// <summary>
-
-        /// Name of the dental service.
-
+        /// Dental service name.
         /// </summary>
-
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
-
-        /// Description of the dental service.
-
+        /// Dental service description.
         /// </summary>
-
         public string Description { get; set; } = string.Empty;
 
         /// <summary>
-
         /// Service price in South African rand (ZAR).
-
         /// </summary>
-
         public decimal Price { get; set; }
     }
 }
