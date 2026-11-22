@@ -36,6 +36,11 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="200">The request succeeded.</response>
         [HttpGet]
         [AllowAnonymous]
+        [ProducesResponseType(typeof(IEnumerable<ServiceDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<ActionResult<IEnumerable<ServiceDto>>> GetServices()
         {
             var services = await _context.Services
