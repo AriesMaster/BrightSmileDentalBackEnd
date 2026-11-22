@@ -1,7 +1,7 @@
 namespace BrightSmileDEntal.DTOs.Auth
 {
     /// <summary>
-    /// The email address used to request a password reset.
+    /// Email address used to request a password reset.
     /// </summary>
     public class PasswordResetRequestDto
     {
