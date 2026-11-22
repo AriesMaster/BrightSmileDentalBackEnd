@@ -4,7 +4,7 @@
 
 A role-based REST API for a dental practice management system. BrightSmile Dental combines an Angular frontend with an ASP.NET Core backend to support patient accounts, dental services, appointment scheduling, and dentist/admin workflows.
 
-> **Project status:** Core backend features are implemented and have undergone manual local API testing. The project remains under active development; production deployment, complete end-to-end integration, and automated testing require further verification.
+> **Project status:** Live in production. The ASP.NET Core API runs on Render and serves the Angular frontend hosted on Netlify. BrightSmile Dental is a full-stack portfolio project that continues to receive feature updates and improvements.
 
 **[Live Angular frontend](https://brightsmiledentalfrontend.netlify.app/)** · **[Frontend repository](https://github.com/AriesMaster/BrightSmileDentalFrontEnd)** · **[Portfolio](https://thabo.netlify.app/)**
 
@@ -27,12 +27,14 @@ Angular SPA (Netlify / localhost:4200)
              |
              | HTTPS + JSON + Bearer JWT
              v
-ASP.NET Core Web API
+ASP.NET Core Web API (Render)
   |-- AuthController          Registration, login, password reset
-  |-- UsersController         Current user identity
+  |-- UsersController         Current user identity and admin patient lookups
   |-- ProfilesController      Profile read/update
   |-- ServicesController      Public catalogue; Admin CRUD
-  |-- AppointmentsController  Booking and lifecycle operations
+  |-- AppointmentsController  Availability, booking and lifecycle operations
+  |-- DentistsController      Public directory and admin management
+  |-- ReportsController       Admin reporting overview
   |
   |-- DTOs and validation
   |-- JWT authentication / role authorization
@@ -75,7 +77,7 @@ The API uses controller-based endpoints, dependency injection, request/response 
 - Dentists view assigned appointments and manage permitted status transitions.
 - Admins can view appointments and perform authorized management actions.
 - Booking requests validate future **UTC** dates, dentist role, and selected service.
-- Appointments occupy **30-minute intervals**.
+- Appointments occupy **30-minute intervals** during clinic hours, Monday to Friday from 09:00 to 17:00 South African Standard Time (SAST).
 - Pending and Confirmed bookings reserve a time slot; cancelled bookings release it.
 - Appointment status lifecycle: **Pending → Confirmed → Completed**, with cancellation of eligible active bookings.
 
@@ -117,12 +119,28 @@ Appointment creation, rescheduling, cancellation, and status updates use databas
 | PUT | `/api/Services/{id}` | Admin |
 | DELETE | `/api/Services/{id}` | Admin |
 
+### Dentist directory, patient management and reporting
+
+| Method | Endpoint | Access |
+| --- | --- | --- |
+| GET | `/api/Dentists` | Public |
+| GET | `/api/Dentists/{id}` | Public |
+| GET | `/api/Dentists/admin` | Admin |
+| GET | `/api/Dentists/admin/{id}` | Admin |
+| POST | `/api/Dentists/admin` | Admin |
+| GET | `/api/Users/patients` | Admin |
+| GET | `/api/Users/patients/{id}` | Admin |
+| GET | `/api/Reports/overview` | Admin |
+
+The reporting overview supplies date-filtered appointment totals, status breakdowns, daily trends, popular services, dentist workload and estimated service values to the Angular analytics dashboard.
+
 ### Appointments
 
 | Method | Endpoint | Access |
 | --- | --- | --- |
 | GET | `/api/Appointments` | Admin |
 | GET | `/api/Appointments/me` | Patient |
+| GET | `/api/Appointments/availability` | Patient — available booking slots |
 | GET | `/api/Appointments/dentist/me` | Dentist |
 | GET | `/api/Appointments/{id}` | Authorized participant or Admin |
 | POST | `/api/Appointments` | Patient |
@@ -156,7 +174,7 @@ Entity Framework Core manages relationships and migrations. Appointment patient 
 
 ```bash
 git clone https://github.com/AriesMaster/BrightSmileDentalBackEnd.git
-cd BrightSmileDentalBackEnd
+cd BrightSmileDentalBackEnd/BrightSmileDEntal
 dotnet restore
 ```
 
@@ -220,11 +238,20 @@ Core backend behavior was manually tested using Swagger UI during development (1
 - Role and ownership checks, DTO validation, EF Core persistence, and scheduling conflict prevention.
 
 **Further verification / planned improvements**
-- Verify the latest deployed backend and complete frontend-to-production-API integration.
 - Validate password-reset email delivery end-to-end.
 - Add automated unit and integration tests, concurrency tests, and broader authorization coverage.
 - Improve OpenAPI response metadata, production diagnostics, and deployment documentation.
-- Continue Angular Admin and Dentist dashboard integration and workflows.
+
+## Container support
+
+From the repository root, use the multi-stage `Dockerfile` to build with the .NET 10 SDK and run on the ASP.NET Core 10 runtime. The container listens on port `10000`.
+
+```bash
+docker build -t brightsmile-api .
+docker run --rm -p 10000:10000 --env-file .env brightsmile-api
+```
+
+Create `.env` locally with the required database, JWT and email settings, using the ASP.NET Core environment-variable convention (for example, `ConnectionStrings__DefaultConnection` and `Jwt__Key`). **Never commit `.env` or credentials.**
 
 ## Related resources
 
