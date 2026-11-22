@@ -6,7 +6,7 @@ A role-based REST API for a dental practice management system. BrightSmile Denta
 
 > **Project status:** Live in production. The ASP.NET Core API runs on Render and serves the Angular frontend hosted on Netlify. BrightSmile Dental is a full-stack portfolio project that continues to receive feature updates and improvements.
 
-**[Live Angular frontend](https://brightsmiledentalfrontend.netlify.app/)** · **[Frontend repository](https://github.com/AriesMaster/BrightSmileDentalFrontEnd)** · **[Portfolio](https://thabo.netlify.app/)**
+**[Live Angular frontend](https://brightsmiledentalfrontend.netlify.app/)** · **[System architecture](docs/ARCHITECTURE.md)** · **[Frontend repository](https://github.com/AriesMaster/BrightSmileDentalFrontEnd)** · **[Portfolio](https://thabo.netlify.app/)**
 
 ## Technical stack
 
@@ -16,11 +16,13 @@ A role-based REST API for a dental practice management system. BrightSmile Denta
 | Data access | Entity Framework Core 10, Npgsql |
 | Database | Supabase PostgreSQL |
 | Security | JWT bearer authentication, role-based authorization, BCrypt |
-| API documentation | Swagger / OpenAPI |
+| API documentation | OpenAPI, Swagger, Scalar |
 | Frontend | Angular, TypeScript, Angular Material |
 | Development tools | Visual Studio, Git, GitHub, Swagger UI |
 
 ## Architecture
+
+For a detailed system overview, data-flow and deployment diagrams, see **[System Architecture](docs/ARCHITECTURE.md)**.
 
 ```text
 Angular SPA (Netlify / localhost:4200)
@@ -207,7 +209,9 @@ In **Development**, the application's startup code also applies pending EF Core 
 https://localhost:<PORT>/swagger
 ```
 
-Use the actual local port shown by `dotnet run`. In Swagger, authorize with the JWT returned by `POST /api/Auth/login` to test protected endpoints.
+Use the actual local port shown by `dotnet run`. Scalar is available locally at `/api-docs` when API documentation is enabled. In Swagger or Scalar, use the JWT returned by `POST /api/Auth/login` to test protected endpoints.
+
+**Production Scalar reference:** [BrightSmile Dental API docs](https://brightsmiledentalbackend.onrender.com/api-docs) — available only after the Render environment sets `ApiDocumentation__Enabled=true` and the deployment is verified.
 
 **CORS:** The backend currently permits `http://localhost:4200` and `https://brightsmiledentalfrontend.netlify.app`.
 
