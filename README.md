@@ -22,7 +22,7 @@ A role-based REST API for a dental practice management system. BrightSmile Denta
 
 ## Architecture
 
-For a detailed system overview, data-flow and deployment diagrams, see **[System Architecture](docs/ARCHITECTURE.md)**. For the database ERD, column descriptions and relationship constraints, see **[Database Design](docs/DATABASE.md)**. For functional requirements, business rules and acceptance criteria, see **[Software Requirements Specification](docs/REQUIREMENTS.md)**. For JWT authentication, authorization, password recovery and security limitations, see **[Security Design](docs/SECURITY.md)**.
+For a detailed system overview, data-flow and deployment diagrams, see **[System Architecture](docs/ARCHITECTURE.md)**. For the database ERD, column descriptions and relationship constraints, see **[Database Design](docs/DATABASE.md)**. For functional requirements, business rules and acceptance criteria, see **[Software Requirements Specification](docs/REQUIREMENTS.md)**. For JWT authentication, authorization, password recovery and security limitations, see **[Security Design](docs/SECURITY.md)**. For Render, Netlify, Supabase, Docker and environment configuration, see **[Deployment Guide](docs/DEPLOYMENT.md)**.
 
 ```text
 Angular SPA (Netlify / localhost:4200)
