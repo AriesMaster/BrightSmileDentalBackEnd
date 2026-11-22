@@ -10,6 +10,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightSmileDEntal.Controllers
 {
+    /// <summary>
+    /// Manages appointment bookings, availability, and status changes.
+    /// </summary>
     [ApiController]
     [Authorize]
     [Route("api/[controller]")]
@@ -28,6 +31,10 @@ namespace BrightSmileDEntal.Controllers
         private static readonly TimeSpan SouthAfricaUtcOffset =
             TimeSpan.FromHours(2);
 
+        /// <summary>
+        /// Initializes the appointment controller.
+        /// </summary>
+        /// <param name="context">The database context used to access appointments.</param>
         public AppointmentsController(ApplicationDbContext context)
         {
             _context = context;
