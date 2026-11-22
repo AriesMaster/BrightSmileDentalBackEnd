@@ -100,6 +100,9 @@ builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
+    var xmlFile = $"{typeof(Program).Assembly.GetName().Name}.xml";
+    options.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFile));
+
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "BrightSmile Dental API",
