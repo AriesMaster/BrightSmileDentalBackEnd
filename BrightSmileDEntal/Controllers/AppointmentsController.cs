@@ -209,15 +209,9 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="200">Request completed successfully.</response>
         /// <response code="401">Authentication is required.</response>
         /// <response code="403">Access is forbidden.</response>
+        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
         [HttpGet]
         [Authorize(Roles = UserRoles.Admin)]
-        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status201Created)]
-        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status200OK)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
             GetAllAppointments()
         {
@@ -238,6 +232,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="200">Request completed successfully.</response>
         /// <response code="401">Authentication is required.</response>
         /// <response code="403">Access is forbidden.</response>
+        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
         [HttpGet("me")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -266,6 +261,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="200">Request completed successfully.</response>
         /// <response code="401">Authentication is required.</response>
         /// <response code="403">Access is forbidden.</response>
+        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
         [HttpGet("dentist/me")]
         [Authorize(Roles = UserRoles.Dentist)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -295,6 +291,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="401">Authentication is required.</response>
         /// <response code="403">Access is forbidden.</response>
         /// <response code="404">The requested resource was not found.</response>
+        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status200OK)]
         [HttpGet("{id:int}")]
         public async Task<ActionResult<AppointmentDto>>
             GetAppointment(int id)
@@ -337,6 +334,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="401">Authentication is required.</response>
         /// <response code="403">Access is forbidden.</response>
         /// <response code="404">The requested resource was not found.</response>
+        [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
         [HttpGet("availability")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<IActionResult> GetAvailableSlots(
@@ -467,6 +465,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="401">Authentication is required.</response>
         /// <response code="403">Access is forbidden.</response>
         /// <response code="409">The requested operation conflicts with the current appointment state.</response>
+        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status201Created)]
         [HttpPost]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<AppointmentDto>>
@@ -578,6 +577,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="403">Access is forbidden.</response>
         /// <response code="404">The requested resource was not found.</response>
         /// <response code="409">The requested operation conflicts with the current appointment state.</response>
+        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status200OK)]
         [HttpPut("{id:int}")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<AppointmentDto>>
