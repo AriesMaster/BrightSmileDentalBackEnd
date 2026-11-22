@@ -8,6 +8,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightSmileDEntal.Controllers
 {
+    /// <summary>
+    /// Provides authenticated account information and administrative patient records.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -15,12 +18,24 @@ namespace BrightSmileDEntal.Controllers
     {
         private readonly ApplicationDbContext _context;
 
+        /// <summary>
+        /// Initializes the users controller.
+        /// </summary>
+        /// <param name="context">The application database context.</param>
         public UsersController(ApplicationDbContext context)
         {
             _context = context;
         }
 
-        // GET /api/Users/me
+        /// <summary>
+        /// Gets the authenticated user's account details.
+        /// </summary>
+        /// <remarks>
+        /// Returns the user identifier, email address, and role from the account associated with the JWT.
+        /// </remarks>
+        /// <response code="200">The request succeeded.</response>
+        /// <response code="401">Authentication is required or the user identity is invalid.</response>
+        /// <response code="404">The user or patient was not found.</response>
         [HttpGet("me")]
         public async Task<IActionResult> GetCurrentUser()
         {
@@ -57,7 +72,15 @@ namespace BrightSmileDEntal.Controllers
             return Ok(user);
         }
 
-        // GET /api/Users/patients
+        /// <summary>
+        /// Lists patient accounts and appointment counts.
+        /// </summary>
+        /// <remarks>
+        /// Administrator access is required. Returns patients ordered by email, including profile contact details, total appointments, and upcoming pending or confirmed appointments.
+        /// </remarks>
+        /// <response code="200">The request succeeded.</response>
+        /// <response code="401">Authentication is required or the user identity is invalid.</response>
+        /// <response code="403">Administrator access is required.</response>
         [HttpGet("patients")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> GetPatients()
@@ -90,7 +113,16 @@ namespace BrightSmileDEntal.Controllers
             return Ok(patients);
         }
 
-        // GET /api/Users/patients/{id}
+        /// <summary>
+        /// Gets a patient record and appointment history.
+        /// </summary>
+        /// <remarks>
+        /// Administrator access is required. Returns patient profile details and appointments ordered from newest to oldest.
+        /// </remarks>
+        /// <response code="200">The request succeeded.</response>
+        /// <response code="401">Authentication is required or the user identity is invalid.</response>
+        /// <response code="403">Administrator access is required.</response>
+        /// <response code="404">The user or patient was not found.</response>
         [HttpGet("patients/{id:int}")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> GetPatient(int id)
