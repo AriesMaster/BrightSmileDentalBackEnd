@@ -211,6 +211,13 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="403">Access is forbidden.</response>
         [HttpGet]
         [Authorize(Roles = UserRoles.Admin)]
+        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(IEnumerable<AppointmentDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(AppointmentDto), StatusCodes.Status200OK)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
             GetAllAppointments()
         {
