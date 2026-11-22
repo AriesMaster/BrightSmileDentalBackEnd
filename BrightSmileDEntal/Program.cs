@@ -5,13 +5,14 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using Scalar.AspNetCore;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register application services and configure PostgreSQL persistence.
 builder.Services.AddControllers();
 
+// Configure PostgreSQL persistence through Entity Framework Core.
 var connectionString = builder.Configuration
     .GetConnectionString("DefaultConnection");
 
@@ -27,7 +28,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<EmailService>();
 
-// Restrict cross-origin requests to approved frontend applications.
+// Allow requests from the local Angular application and deployed frontend.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAngularApp", policy =>
@@ -41,7 +42,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Validate JWT configuration before registering authentication services.
+// Validate required JWT settings before initializing authentication.
 var jwtKey = builder.Configuration["Jwt:Key"];
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
@@ -70,7 +71,7 @@ if (string.IsNullOrWhiteSpace(jwtAudience))
         "JWT audience is missing from configuration.");
 }
 
-// Require valid issuer, audience, expiration, and signing credentials.
+// Enforce token signature, issuer, audience and expiration validation.
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -94,11 +95,22 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
-// Configure Swagger to support authenticated API requests using JWT.
+// Generate the OpenAPI specification used by Swagger UI and Scalar.
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
 {
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "BrightSmile Dental API",
+        Version = "v1",
+        Description =
+            "REST API for dental practice management, " +
+            "including authentication, appointments, " +
+            "dental services, dentist management and reporting."
+    });
+
+    // Define JWT bearer authentication for documented API operations.
     options.AddSecurityDefinition(
         "Bearer",
         new OpenApiSecurityScheme
@@ -124,7 +136,6 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
-// Apply pending migrations and initialize demo accounts in development only.
 if (app.Environment.IsDevelopment())
 {
     try
@@ -134,11 +145,9 @@ if (app.Environment.IsDevelopment())
         var context = scope.ServiceProvider
             .GetRequiredService<ApplicationDbContext>();
 
+        // Apply schema changes and seed development accounts.
         await context.Database.MigrateAsync();
-
-        await DbSeeder.SeedDemoUsersAsync(
-            context,
-            app.Logger);
+        await DbSeeder.SeedDemoUsersAsync(context, app.Logger);
     }
     catch (Exception ex)
     {
@@ -148,17 +157,48 @@ if (app.Environment.IsDevelopment())
 
         throw;
     }
+}
 
-    // Expose interactive API documentation in development environments.
+// API documentation is enabled in development unless explicitly configured.
+var documentationEnabled =
+    builder.Configuration.GetValue<bool?>("ApiDocumentation:Enabled")
+    ?? app.Environment.IsDevelopment();
+
+if (documentationEnabled)
+{
+    // Serve the OpenAPI document consumed by both documentation interfaces.
     app.UseSwagger();
-    app.UseSwaggerUI();
+
+    if (app.Environment.IsDevelopment())
+    {
+        // Keep Swagger UI restricted to the development environment.
+        app.UseSwaggerUI(options =>
+        {
+            options.SwaggerEndpoint(
+                "/swagger/v1/swagger.json",
+                "BrightSmile Dental API v1");
+
+            options.DocumentTitle =
+                "BrightSmile Dental - Swagger UI";
+        });
+    }
+
+    // Expose Scalar as the API reference when documentation is enabled.
+    app.MapScalarApiReference("/api-docs", options =>
+    {
+        options
+            .WithTitle("BrightSmile Dental API")
+            .WithOpenApiRoutePattern(
+                "/swagger/{documentName}/swagger.json")
+            .ForceDarkMode();
+    });
 }
 
 app.UseHttpsRedirection();
 
 app.UseCors("AllowAngularApp");
 
-// Authentication must precede authorization in the request pipeline.
+// Authenticate requests before evaluating endpoint authorization policies.
 app.UseAuthentication();
 app.UseAuthorization();
 
