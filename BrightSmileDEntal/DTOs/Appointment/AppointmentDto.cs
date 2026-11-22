@@ -12,52 +12,52 @@ namespace BrightSmileDEntal.DTOs.Appointment
         public int Id { get; set; }
 
         /// <summary>
-        /// Identifier of the patient.
+        /// Patient identifier.
         /// </summary>
         public int PatientId { get; set; }
 
         /// <summary>
-        /// Display name of the patient.
+        /// Patient name.
         /// </summary>
         public string PatientName { get; set; } = string.Empty;
 
         /// <summary>
-        /// Identifier of the dentist.
+        /// Dentist identifier.
         /// </summary>
         public int DoctorId { get; set; }
 
         /// <summary>
-        /// Display name of the dentist.
+        /// Dentist name.
         /// </summary>
         public string DoctorName { get; set; } = string.Empty;
 
         /// <summary>
-        /// Identifier of the dental service.
+        /// Dental service identifier.
         /// </summary>
         public int ServiceId { get; set; }
 
         /// <summary>
-        /// Name of the dental service.
+        /// Dental service name.
         /// </summary>
         public string ServiceName { get; set; } = string.Empty;
 
         /// <summary>
-        /// Service price in South African rand (ZAR).
+        /// Service price in ZAR.
         /// </summary>
         public decimal ServicePrice { get; set; }
 
         /// <summary>
-        /// Scheduled appointment date and time.
+        /// Appointment date and time.
         /// </summary>
         public DateTime AppointmentDate { get; set; }
 
         /// <summary>
-        /// Current appointment status.
+        /// Appointment status.
         /// </summary>
         public string Status { get; set; } = string.Empty;
 
         /// <summary>
-        /// Optional appointment notes (maximum 1,000 characters where validated).
+        /// Optional appointment notes.
         /// </summary>
         public string? AdditionalInfo { get; set; }
     }
