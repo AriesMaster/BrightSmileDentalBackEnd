@@ -1,7 +1,7 @@
 ﻿
 namespace BrightSmileDEntal.DTOs.Appointment
 {
-        /// <summary>
+    /// <summary>
     /// Appointment details returned by the API.
     /// </summary>
     public class AppointmentDto
