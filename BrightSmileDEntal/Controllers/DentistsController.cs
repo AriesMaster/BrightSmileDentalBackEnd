@@ -10,6 +10,9 @@ using Npgsql;
 
 namespace BrightSmileDEntal.Controllers
 {
+    /// <summary>
+    /// Provides public dentist information and administrative dentist management.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class DentistsController : ControllerBase
@@ -17,6 +20,11 @@ namespace BrightSmileDEntal.Controllers
         private readonly ApplicationDbContext _context;
         private readonly ILogger<DentistsController> _logger;
 
+        /// <summary>
+        /// Initializes the dentist management controller.
+        /// </summary>
+        /// <param name="context">The application database context.</param>
+        /// <param name="logger">The controller logger.</param>
         public DentistsController(
             ApplicationDbContext context,
             ILogger<DentistsController> logger)
@@ -25,11 +33,14 @@ namespace BrightSmileDEntal.Controllers
             _logger = logger;
         }
 
-        // ==========================================
-        // GET ALL DENTISTS - PUBLIC
-        // GET /api/Dentists
-        // ==========================================
 
+        /// <summary>
+        /// Lists dentists available in the practice.
+        /// </summary>
+        /// <remarks>
+        /// Public endpoint returning dentist identifiers, names, and email addresses, ordered by name.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
         [HttpGet]
         [AllowAnonymous]
         public async Task<IActionResult> GetDentists()
@@ -77,11 +88,15 @@ namespace BrightSmileDEntal.Controllers
             return Ok(result);
         }
 
-        // ==========================================
-        // GET DENTIST BY ID - PUBLIC
-        // GET /api/Dentists/{id}
-        // ==========================================
 
+        /// <summary>
+        /// Gets public information about a dentist.
+        /// </summary>
+        /// <remarks>
+        /// Returns the dentist's identifier, name, and email address.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="404">The dentist was not found.</response>
         [HttpGet("{id:int}")]
         [AllowAnonymous]
         public async Task<IActionResult> GetDentist(int id)
@@ -135,11 +150,16 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // ==========================================
-        // GET ALL DENTISTS - ADMIN
-        // GET /api/Dentists/admin
-        // ==========================================
 
+        /// <summary>
+        /// Lists dentists with appointment statistics.
+        /// </summary>
+        /// <remarks>
+        /// Administrator access is required. Includes total appointment counts and upcoming pending or confirmed appointments.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Administrator access is required.</response>
         [HttpGet("admin")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> GetAdminDentists()
@@ -188,11 +208,17 @@ namespace BrightSmileDEntal.Controllers
             return Ok(dentists);
         }
 
-        // ==========================================
-        // GET DENTIST DETAILS - ADMIN
-        // GET /api/Dentists/admin/{id}
-        // ==========================================
 
+        /// <summary>
+        /// Gets dentist details and appointment history.
+        /// </summary>
+        /// <remarks>
+        /// Administrator access is required. Includes profile details and associated appointments, ordered by date descending.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Administrator access is required.</response>
+        /// <response code="404">The dentist was not found.</response>
         [HttpGet("admin/{id:int}")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> GetAdminDentist(int id)
@@ -258,11 +284,19 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // ==========================================
-        // REGISTER NEW DENTIST - ADMIN
-        // POST /api/Dentists/admin
-        // ==========================================
 
+        /// <summary>
+        /// Creates a dentist account and profile.
+        /// </summary>
+        /// <remarks>
+        /// Administrator access is required. Email addresses are normalized, passwords are hashed with BCrypt, and duplicate accounts are rejected.
+        /// </remarks>
+        /// <response code="201">Dentist account created.</response>
+        /// <response code="400">The request is invalid.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Administrator access is required.</response>
+        /// <response code="409">An account with this email already exists.</response>
+        /// <response code="500">The account could not be saved.</response>
         [HttpPost("admin")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> CreateDentist(
@@ -279,9 +313,6 @@ namespace BrightSmileDEntal.Controllers
             var phoneNumber =
                 dto.PhoneNumber?.Trim() ?? string.Empty;
 
-            // ======================================
-            // VALIDATE INPUT
-            // ======================================
 
             if (firstName.Length < 2 ||
                 lastName.Length < 2)
@@ -301,9 +332,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // ======================================
-            // CHECK EXISTING ACCOUNT
-            // ======================================
 
             var emailExists = await _context.Users
                 .AnyAsync(user =>
@@ -318,9 +346,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // ======================================
-            // CREATE DENTIST ACCOUNT
-            // ======================================
 
             var user = new User
             {
@@ -333,9 +358,6 @@ namespace BrightSmileDEntal.Controllers
                         dto.Password)
             };
 
-            // ======================================
-            // CREATE DENTIST PROFILE
-            // ======================================
 
             var profile = new Profile
             {
@@ -347,9 +369,6 @@ namespace BrightSmileDEntal.Controllers
 
             _context.Profiles.Add(profile);
 
-            // ======================================
-            // SAVE TO DATABASE
-            // ======================================
 
             try
             {
