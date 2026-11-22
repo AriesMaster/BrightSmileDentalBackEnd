@@ -226,6 +226,17 @@ Core backend behavior was manually tested using Swagger UI during development (1
 - Improve OpenAPI response metadata, production diagnostics, and deployment documentation.
 - Continue Angular Admin and Dentist dashboard integration and workflows.
 
+## Container support
+
+The repository includes a multi-stage `Dockerfile` using the .NET 10 SDK for publishing and the ASP.NET Core 10 runtime for execution. The container listens on port `10000`.
+
+```bash
+docker build -t brightsmile-api .
+docker run --rm -p 10000:10000 --env-file .env brightsmile-api
+```
+
+Create `.env` locally with the required database, JWT and email settings, using the ASP.NET Core environment-variable convention (for example, `ConnectionStrings__DefaultConnection` and `Jwt__Key`). **Never commit `.env` or credentials.** A successful image build or production deployment has not been independently verified here; the Dockerfile is an existing implementation, not evidence of a tested deployment pipeline.
+
 ## Related resources
 
 - **Frontend:** https://github.com/AriesMaster/BrightSmileDentalFrontEnd
