@@ -7,6 +7,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightSmileDEntal.Controllers;
 
+/// <summary>
+/// Provides appointment reporting and operational metrics for administrators.
+/// </summary>
 [ApiController]
 [Authorize(Roles = UserRoles.Admin)]
 [Route("api/[controller]")]
@@ -15,12 +18,30 @@ public class ReportsController : ControllerBase
     private readonly ApplicationDbContext _context;
     private static readonly TimeSpan SastOffset = TimeSpan.FromHours(2);
 
+    /// <summary>
+    /// Initializes the reporting controller.
+    /// </summary>
+    /// <param name="context">The application database context.</param>
     public ReportsController(ApplicationDbContext context)
     {
         _context = context;
     }
 
-    // GET /api/Reports/overview?from=2026-11-01&to=2026-11-30
+    /// <summary>
+    /// Returns appointment activity and operational metrics for a reporting period.
+    /// </summary>
+    /// <remarks>
+    /// Date filters use South African calendar days and default to the last 30 days.
+    /// The maximum inclusive reporting period is 366 days. Monetary totals represent
+    /// estimated service values, not payments collected or recognized revenue.
+    /// </remarks>
+    /// <param name="from">Optional inclusive start date in South African time.</param>
+    /// <param name="to">Optional inclusive end date in South African time.</param>
+    /// <param name="cancellationToken">Cancels the database query when the request is aborted.</param>
+    /// <response code="200">Returns appointment summaries, daily trends, service statistics, and dentist workload.</response>
+    /// <response code="400">The date range is invalid or exceeds 366 days.</response>
+    /// <response code="401">Authentication is required.</response>
+    /// <response code="403">Administrator access is required.</response>
     [HttpGet("overview")]
     public async Task<IActionResult> GetOverview(
         [FromQuery] DateOnly? from,
