@@ -38,10 +38,8 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="200">Profile returned or updated successfully.</response>
         /// <response code="401">Authentication or a valid user identity is required.</response>
         /// <response code="404">The profile or user account was not found.</response>
+        [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status200OK)]
         [HttpGet("me")]
-        [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status201Created)]
         public async Task<ActionResult<ProfileDto>> GetMyProfile()
         {
             var userId = GetCurrentUserId();
@@ -92,6 +90,8 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="400">Profile information is invalid.</response>
         /// <response code="401">Authentication or a valid user identity is required.</response>
         /// <response code="404">The profile or user account was not found.</response>
+        [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ProfileDto), StatusCodes.Status201Created)]
         [HttpPut("me")]
         public async Task<ActionResult<ProfileDto>> UpdateMyProfile(
             [FromBody] UpdateProfileDto dto)
