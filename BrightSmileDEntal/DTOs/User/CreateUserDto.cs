@@ -1,7 +1,7 @@
 ﻿namespace BrightSmileDEntal.DTOs.User
 {
     /// <summary>
-    /// Reserved request model for future user creation functionality.
+    /// Reserved model for future user creation.
     /// </summary>
     public class CreateUserDto
     {
