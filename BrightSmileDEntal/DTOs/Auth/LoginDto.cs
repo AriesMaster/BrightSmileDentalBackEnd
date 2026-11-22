@@ -11,11 +11,8 @@
         public string Email { get; set; } = string.Empty;
 
         /// <summary>
-
         /// Account password.
-
         /// </summary>
-
         public string Password { get; set; } = string.Empty;
     }
 }
