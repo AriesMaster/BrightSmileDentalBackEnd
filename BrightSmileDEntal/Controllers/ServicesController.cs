@@ -9,20 +9,31 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightSmileDEntal.Controllers
 {
+    /// <summary>
+    /// Manages the dental services offered by the practice.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     public class ServicesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
 
+        /// <summary>
+        /// Initializes the services controller.
+        /// </summary>
+        /// <param name="context">The application database context.</param>
         public ServicesController(ApplicationDbContext context)
         {
             _context = context;
         }
 
         /// <summary>
-        /// Returns all available dental services.
+        /// Lists dental services available for booking.
         /// </summary>
+        /// <remarks>
+        /// This endpoint is publicly accessible. Services are ordered alphabetically by name.
+        /// </remarks>
+        /// <response code="200">The request succeeded.</response>
         [HttpGet]
         [AllowAnonymous]
         public async Task<ActionResult<IEnumerable<ServiceDto>>> GetServices()
@@ -43,8 +54,13 @@ namespace BrightSmileDEntal.Controllers
         }
 
         /// <summary>
-        /// Returns a dental service by its ID.
+        /// Gets a dental service by its identifier.
         /// </summary>
+        /// <remarks>
+        /// This endpoint is publicly accessible.
+        /// </remarks>
+        /// <response code="200">The request succeeded.</response>
+        /// <response code="404">The service was not found.</response>
         [HttpGet("{id:int}")]
         [AllowAnonymous]
         public async Task<ActionResult<ServiceDto>> GetService(int id)
@@ -73,8 +89,16 @@ namespace BrightSmileDEntal.Controllers
         }
 
         /// <summary>
-        /// Creates a new dental service. Admin access is required.
+        /// Creates a dental service.
         /// </summary>
+        /// <remarks>
+        /// Administrator access is required. Service names must be nonempty and unique, ignoring case. Successful requests return the created service and its resource location.
+        /// </remarks>
+        /// <response code="201">The service was created.</response>
+        /// <response code="400">The supplied service details are invalid.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Administrator access is required.</response>
+        /// <response code="409">The request conflicts with an existing service or appointment.</response>
         [HttpPost]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<ActionResult<ServiceDto>> CreateService(
@@ -123,8 +147,17 @@ namespace BrightSmileDEntal.Controllers
         }
 
         /// <summary>
-        /// Updates an existing dental service. Admin access is required.
+        /// Updates an existing dental service.
         /// </summary>
+        /// <remarks>
+        /// Administrator access is required. The service name must be nonempty and must not duplicate another service name, ignoring case.
+        /// </remarks>
+        /// <response code="200">The request succeeded.</response>
+        /// <response code="400">The supplied service details are invalid.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Administrator access is required.</response>
+        /// <response code="404">The service was not found.</response>
+        /// <response code="409">The request conflicts with an existing service or appointment.</response>
         [HttpPut("{id:int}")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<ActionResult<ServiceDto>> UpdateService(
@@ -178,8 +211,16 @@ namespace BrightSmileDEntal.Controllers
         }
 
         /// <summary>
-        /// Deletes a service that has no associated appointments.
+        /// Deletes an unused dental service.
         /// </summary>
+        /// <remarks>
+        /// Administrator access is required. Services referenced by existing appointments cannot be deleted, preserving appointment history.
+        /// </remarks>
+        /// <response code="204">The service was deleted.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Administrator access is required.</response>
+        /// <response code="404">The service was not found.</response>
+        /// <response code="409">The request conflicts with an existing service or appointment.</response>
         [HttpDelete("{id:int}")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> DeleteService(int id)
