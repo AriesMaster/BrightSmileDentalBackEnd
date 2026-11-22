@@ -9,6 +9,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BrightSmileDEntal.Controllers
 {
+    /// <summary>
+    /// Manages profile information for the authenticated user.
+    /// </summary>
     [ApiController]
     [Route("api/[controller]")]
     [Authorize]
@@ -16,16 +19,25 @@ namespace BrightSmileDEntal.Controllers
     {
         private readonly ApplicationDbContext _context;
 
+        /// <summary>
+        /// Initializes the profile controller.
+        /// </summary>
+        /// <param name="context">The application database context.</param>
         public ProfilesController(ApplicationDbContext context)
         {
             _context = context;
         }
 
-        // ==========================================
-        // GET CURRENT USER PROFILE
-        // GET /api/Profiles/me
-        // ==========================================
 
+        /// <summary>
+        /// Gets the authenticated user's profile.
+        /// </summary>
+        /// <remarks>
+        /// Returns the profile associated with the user identifier in the JWT.
+        /// </remarks>
+        /// <response code="200">Profile returned or updated successfully.</response>
+        /// <response code="401">Authentication or a valid user identity is required.</response>
+        /// <response code="404">The profile or user account was not found.</response>
         [HttpGet("me")]
         public async Task<ActionResult<ProfileDto>> GetMyProfile()
         {
@@ -65,11 +77,18 @@ namespace BrightSmileDEntal.Controllers
             return Ok(profile);
         }
 
-        // ==========================================
-        // CREATE OR UPDATE CURRENT USER PROFILE
-        // PUT /api/Profiles/me
-        // ==========================================
 
+        /// <summary>
+        /// Creates or updates the authenticated user's profile.
+        /// </summary>
+        /// <remarks>
+        /// Validates personal details and stores dates of birth as UTC-normalized calendar dates for PostgreSQL compatibility. Returns 201 when a profile is created and 200 when an existing profile is updated.
+        /// </remarks>
+        /// <response code="200">Profile returned or updated successfully.</response>
+        /// <response code="201">A new profile was created.</response>
+        /// <response code="400">Profile information is invalid.</response>
+        /// <response code="401">Authentication or a valid user identity is required.</response>
+        /// <response code="404">The profile or user account was not found.</response>
         [HttpPut("me")]
         public async Task<ActionResult<ProfileDto>> UpdateMyProfile(
             [FromBody] UpdateProfileDto dto)
@@ -84,9 +103,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // ======================================
-            // VALIDATE PERSONAL INFORMATION
-            // ======================================
 
             var firstName = dto.FirstName?.Trim()
                 ?? string.Empty;
@@ -134,9 +150,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // ======================================
-            // NORMALIZE DATE OF BIRTH TO UTC
-            // ======================================
 
             DateTime? dateOfBirth = null;
 
@@ -161,9 +174,6 @@ namespace BrightSmileDEntal.Controllers
                 }
             }
 
-            // ======================================
-            // VERIFY USER ACCOUNT
-            // ======================================
 
             var userExists = await _context.Users
                 .AnyAsync(u => u.Id == userId.Value);
@@ -176,9 +186,6 @@ namespace BrightSmileDEntal.Controllers
                 });
             }
 
-            // ======================================
-            // RETRIEVE EXISTING PROFILE
-            // ======================================
 
             var profile = await _context.Profiles
                 .FirstOrDefaultAsync(
@@ -187,9 +194,6 @@ namespace BrightSmileDEntal.Controllers
 
             var isNewProfile = profile == null;
 
-            // ======================================
-            // CREATE PROFILE IF MISSING
-            // ======================================
 
             if (profile == null)
             {
@@ -201,9 +205,6 @@ namespace BrightSmileDEntal.Controllers
                 _context.Profiles.Add(profile);
             }
 
-            // ======================================
-            // UPDATE PROFILE FIELDS
-            // ======================================
 
             profile.FirstName = firstName;
             profile.LastName = lastName;
@@ -211,15 +212,9 @@ namespace BrightSmileDEntal.Controllers
             profile.DateOfBirth = dateOfBirth;
             profile.Gender = gender;
 
-            // ======================================
-            // SAVE CHANGES
-            // ======================================
 
             await _context.SaveChangesAsync();
 
-            // ======================================
-            // RETURN PROFILE DTO
-            // ======================================
 
             var result = new ProfileDto
             {
@@ -243,9 +238,6 @@ namespace BrightSmileDEntal.Controllers
             return Ok(result);
         }
 
-        // ==========================================
-        // JWT USER ID HELPER
-        // ==========================================
 
         private int? GetCurrentUserId()
         {
