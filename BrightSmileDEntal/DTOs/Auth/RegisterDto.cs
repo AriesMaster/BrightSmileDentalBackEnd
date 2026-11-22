@@ -10,12 +10,12 @@ namespace BrightSmileDEntal.DTOs.Auth
     public class RegisterDto
     {
 
-        [Required(ErrorMessage = "Email address is required.")]
-        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
-        [StringLength(256)]
         /// <summary>
         /// Account email address.
         /// </summary>
+        [Required(ErrorMessage = "Email address is required.")]
+        [EmailAddress(ErrorMessage = "Enter a valid email address.")]
+        [StringLength(256)]
         public string Email { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Password is required.")]
@@ -27,7 +27,6 @@ namespace BrightSmileDEntal.DTOs.Auth
         /// Account password.
         /// </summary>
         public string Password { get; set; } = string.Empty;
-
 
         [Required(ErrorMessage = "First name is required.")]
         [StringLength(
@@ -51,7 +50,6 @@ namespace BrightSmileDEntal.DTOs.Auth
         /// </summary>
         public string LastName { get; set; } = string.Empty;
 
-
         [Phone(ErrorMessage = "Enter a valid phone number.")]
         [StringLength(
             20,
@@ -62,11 +60,10 @@ namespace BrightSmileDEntal.DTOs.Auth
         /// </summary>
         public string PhoneNumber { get; set; } = string.Empty;
 
-
-        [DataType(DataType.Date)]
         /// <summary>
         /// Date of birth, if provided.
         /// </summary>
+        [DataType(DataType.Date)]
         public DateTime? DateOfBirth { get; set; }
 
         [StringLength(
