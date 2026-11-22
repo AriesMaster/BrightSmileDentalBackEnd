@@ -1,8 +1,13 @@
 namespace BrightSmileDEntal.DTOs.Auth
 {
-    // DTO used when a user requests a password reset (provides email only)
+    /// <summary>
+    /// The email address used to request a password reset.
+    /// </summary>
     public class PasswordResetRequestDto
     {
+        /// <summary>
+        /// Account email address.
+        /// </summary>
         public string Email { get; set; } = string.Empty;
     }
 }
