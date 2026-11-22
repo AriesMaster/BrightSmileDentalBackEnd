@@ -34,13 +34,9 @@ namespace BrightSmileDEntal.Controllers
         /// This endpoint is publicly accessible. Services are ordered alphabetically by name.
         /// </remarks>
         /// <response code="200">The request succeeded.</response>
+        [ProducesResponseType(typeof(IEnumerable<ServiceDto>), StatusCodes.Status200OK)]
         [HttpGet]
         [AllowAnonymous]
-        [ProducesResponseType(typeof(IEnumerable<ServiceDto>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status201Created)]
-        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<ActionResult<IEnumerable<ServiceDto>>> GetServices()
         {
             var services = await _context.Services
@@ -66,6 +62,7 @@ namespace BrightSmileDEntal.Controllers
         /// </remarks>
         /// <response code="200">The request succeeded.</response>
         /// <response code="404">The service was not found.</response>
+        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
         [HttpGet("{id:int}")]
         [AllowAnonymous]
         public async Task<ActionResult<ServiceDto>> GetService(int id)
@@ -104,6 +101,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="401">Authentication is required.</response>
         /// <response code="403">Administrator access is required.</response>
         /// <response code="409">The request conflicts with an existing service or appointment.</response>
+        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status201Created)]
         [HttpPost]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<ActionResult<ServiceDto>> CreateService(
@@ -163,6 +161,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="403">Administrator access is required.</response>
         /// <response code="404">The service was not found.</response>
         /// <response code="409">The request conflicts with an existing service or appointment.</response>
+        [ProducesResponseType(typeof(ServiceDto), StatusCodes.Status200OK)]
         [HttpPut("{id:int}")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<ActionResult<ServiceDto>> UpdateService(
@@ -226,6 +225,7 @@ namespace BrightSmileDEntal.Controllers
         /// <response code="403">Administrator access is required.</response>
         /// <response code="404">The service was not found.</response>
         /// <response code="409">The request conflicts with an existing service or appointment.</response>
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
         [HttpDelete("{id:int}")]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<IActionResult> DeleteService(int id)
