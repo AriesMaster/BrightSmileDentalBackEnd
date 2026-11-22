@@ -1,7 +1,7 @@
 ﻿namespace BrightSmileDEntal.DTOs.User
 {
     /// <summary>
-    /// Reserved request model for future user update functionality.
+    /// Reserved model for future user updates.
     /// </summary>
     public class UpdateUserDto
     {
