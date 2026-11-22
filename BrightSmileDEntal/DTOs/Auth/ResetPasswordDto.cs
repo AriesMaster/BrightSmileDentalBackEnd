@@ -1,7 +1,7 @@
 namespace BrightSmileDEntal.DTOs.Auth
 {
     /// <summary>
-    /// A password reset token and replacement password.
+    /// Password reset token and replacement password.
     /// </summary>
     public class ResetPasswordDto
     {
@@ -10,7 +10,7 @@ namespace BrightSmileDEntal.DTOs.Auth
         /// </summary>
         public string Token { get; set; } = string.Empty;
         /// <summary>
-        /// Replacement account password.
+        /// Replacement password.
         /// </summary>
         public string NewPassword { get; set; } = string.Empty;
     }
