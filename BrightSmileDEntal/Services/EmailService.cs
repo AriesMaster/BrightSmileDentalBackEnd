@@ -26,6 +26,11 @@ namespace BrightSmileDEntal.Services
                 throw new InvalidOperationException("SMTP configuration is missing (Smtp:Host or Smtp:Port).");
             }
 
+            if (string.IsNullOrWhiteSpace(from))
+            {
+                throw new InvalidOperationException("SMTP sender address is missing (Smtp:From or Smtp:Username).");
+            }
+
             if (!int.TryParse(portStr, out var port))
                 port = 25;
 
