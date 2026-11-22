@@ -33,9 +33,6 @@ namespace BrightSmileDEntal.Controllers
             _context = context;
         }
 
-        // ==========================================
-        // CURRENT USER AND AUTHORIZATION
-        // ==========================================
 
         private int? CurrentUserId
         {
@@ -53,9 +50,6 @@ namespace BrightSmileDEntal.Controllers
         private bool IsAdmin =>
             User.IsInRole(UserRoles.Admin);
 
-        // ==========================================
-        // APPOINTMENT VALIDATION
-        // ==========================================
 
         private static bool IsValidDate(DateTime date)
         {
@@ -116,10 +110,8 @@ namespace BrightSmileDEntal.Controllers
                 || status == "Confirmed";
         }
 
-        // ==========================================
-        // POSTGRESQL BOOKING LOCK
-        // ==========================================
 
+        // The transaction-scoped lock prevents concurrent bookings for the same dentist.
         private async Task LockDentistSchedule(int doctorId)
         {
             // Must be called within an active transaction.
@@ -127,9 +119,6 @@ namespace BrightSmileDEntal.Controllers
                 $"SELECT pg_advisory_xact_lock(48291, {doctorId})");
         }
 
-        // ==========================================
-        // CONFLICT DETECTION
-        // ==========================================
 
         private async Task<bool> HasConflict(
             int doctorId,
@@ -153,9 +142,6 @@ namespace BrightSmileDEntal.Controllers
                     || a.Id != excludeAppointmentId.Value));
         }
 
-        // ==========================================
-        // QUERY AND MAPPING HELPERS
-        // ==========================================
 
         private IQueryable<Appointment> AppointmentQuery()
         {
@@ -206,10 +192,16 @@ namespace BrightSmileDEntal.Controllers
             };
         }
 
-        // ==========================================
-        // GET ALL APPOINTMENTS - ADMIN
-        // ==========================================
 
+        /// <summary>
+        /// Returns all appointments, ordered by appointment date.
+        /// </summary>
+        /// <remarks>
+        /// Accessible to administrators only.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
         [HttpGet]
         [Authorize(Roles = UserRoles.Admin)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -222,10 +214,16 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // ==========================================
-        // GET MY APPOINTMENTS - PATIENT
-        // ==========================================
 
+        /// <summary>
+        /// Returns appointments belonging to the authenticated patient.
+        /// </summary>
+        /// <remarks>
+        /// Accessible to patients only.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
         [HttpGet("me")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -244,10 +242,16 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // ==========================================
-        // GET MY APPOINTMENTS - DENTIST
-        // ==========================================
 
+        /// <summary>
+        /// Returns appointments assigned to the authenticated dentist.
+        /// </summary>
+        /// <remarks>
+        /// Accessible to dentists only.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
         [HttpGet("dentist/me")]
         [Authorize(Roles = UserRoles.Dentist)]
         public async Task<ActionResult<IEnumerable<AppointmentDto>>>
@@ -266,10 +270,17 @@ namespace BrightSmileDEntal.Controllers
             return Ok(appointments.Select(MapToDto));
         }
 
-        // ==========================================
-        // GET APPOINTMENT BY ID
-        // ==========================================
 
+        /// <summary>
+        /// Returns an appointment by its identifier.
+        /// </summary>
+        /// <remarks>
+        /// Accessible to the assigned patient, dentist, or an administrator.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
+        /// <response code="404">The requested resource was not found.</response>
         [HttpGet("{id:int}")]
         public async Task<ActionResult<AppointmentDto>>
             GetAppointment(int id)
@@ -300,16 +311,18 @@ namespace BrightSmileDEntal.Controllers
             return Ok(MapToDto(appointment));
         }
 
-        // ==========================================
-        // GET AVAILABLE APPOINTMENT SLOTS
-        //
-        // GET /api/Appointments/availability
-        //     ?doctorId=2&date=2026-11-23
-        //
-        // Returns available times in SAST:
-        // ["09:00", "09:30", "10:00", ...]
-        // ==========================================
 
+        /// <summary>
+        /// Returns available appointment start times for a dentist on a specified date.
+        /// </summary>
+        /// <remarks>
+        /// Times are returned in South African Standard Time (SAST). The practice operates Monday to Friday, 09:00–17:00, in 30-minute slots. Past and occupied slots are excluded.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="400">The request is invalid.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
+        /// <response code="404">The requested resource was not found.</response>
         [HttpGet("availability")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<IActionResult> GetAvailableSlots(
@@ -428,10 +441,18 @@ namespace BrightSmileDEntal.Controllers
             return Ok(availableSlots);
         }
 
-        // ==========================================
-        // CREATE APPOINTMENT - PATIENT
-        // ==========================================
 
+        /// <summary>
+        /// Creates an appointment for the authenticated patient.
+        /// </summary>
+        /// <remarks>
+        /// The requested UTC date must be within two years and correspond to an available 30-minute slot during operating hours. A transaction-level PostgreSQL advisory lock serializes bookings for the same dentist.
+        /// </remarks>
+        /// <response code="201">Appointment created.</response>
+        /// <response code="400">The request is invalid.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
+        /// <response code="409">The requested operation conflicts with the current appointment state.</response>
         [HttpPost]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<AppointmentDto>>
@@ -530,10 +551,19 @@ namespace BrightSmileDEntal.Controllers
                 MapToDto(created));
         }
 
-        // ==========================================
-        // RESCHEDULE APPOINTMENT - PATIENT
-        // ==========================================
 
+        /// <summary>
+        /// Reschedules a pending appointment owned by the authenticated patient.
+        /// </summary>
+        /// <remarks>
+        /// The new UTC date must meet operating-hour and availability requirements. Concurrent changes to the dentist's schedule are serialized within a database transaction.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="400">The request is invalid.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
+        /// <response code="404">The requested resource was not found.</response>
+        /// <response code="409">The requested operation conflicts with the current appointment state.</response>
         [HttpPut("{id:int}")]
         [Authorize(Roles = UserRoles.Patient)]
         public async Task<ActionResult<AppointmentDto>>
@@ -633,10 +663,19 @@ namespace BrightSmileDEntal.Controllers
             return Ok(MapToDto(updated));
         }
 
-        // ==========================================
-        // UPDATE STATUS - DENTIST OR ADMIN
-        // ==========================================
 
+        /// <summary>
+        /// Updates an appointment's status.
+        /// </summary>
+        /// <remarks>
+        /// Dentists may update their own appointments; administrators may update any appointment. Pending appointments can be confirmed, and confirmed appointments can be completed once their start time has passed. Active appointments may be cancelled.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="400">The request is invalid.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
+        /// <response code="404">The requested resource was not found.</response>
+        /// <response code="409">The requested operation conflicts with the current appointment state.</response>
         [HttpPatch("{id:int}/status")]
         [Authorize(Roles =
             UserRoles.Dentist + "," + UserRoles.Admin)]
@@ -749,10 +788,18 @@ namespace BrightSmileDEntal.Controllers
             });
         }
 
-        // ==========================================
-        // CANCEL APPOINTMENT - PATIENT OR ADMIN
-        // ==========================================
 
+        /// <summary>
+        /// Cancels an active appointment.
+        /// </summary>
+        /// <remarks>
+        /// Patients may cancel their own appointments; administrators may cancel any active appointment.
+        /// </remarks>
+        /// <response code="200">Request completed successfully.</response>
+        /// <response code="401">Authentication is required.</response>
+        /// <response code="403">Access is forbidden.</response>
+        /// <response code="404">The requested resource was not found.</response>
+        /// <response code="409">The requested operation conflicts with the current appointment state.</response>
         [HttpPatch("{id:int}/cancel")]
         [Authorize(Roles =
             UserRoles.Patient + "," + UserRoles.Admin)]
