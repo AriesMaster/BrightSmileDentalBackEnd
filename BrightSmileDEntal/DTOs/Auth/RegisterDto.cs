@@ -17,16 +17,19 @@ namespace BrightSmileDEntal.DTOs.Auth
         [EmailAddress(ErrorMessage = "Enter a valid email address.")]
         [StringLength(256)]
         public string Email { get; set; } = string.Empty;
+        /// <summary>
+        /// Account password.
+        /// </summary>
 
         [Required(ErrorMessage = "Password is required.")]
         [MinLength(
             8,
             ErrorMessage = "Password must contain at least 8 characters."
         )]
-        /// <summary>
-        /// Account password.
-        /// </summary>
         public string Password { get; set; } = string.Empty;
+        /// <summary>
+        /// Given name.
+        /// </summary>
 
         [Required(ErrorMessage = "First name is required.")]
         [StringLength(
@@ -34,10 +37,10 @@ namespace BrightSmileDEntal.DTOs.Auth
             MinimumLength = 2,
             ErrorMessage = "First name must contain between 2 and 100 characters."
         )]
-        /// <summary>
-        /// Given name.
-        /// </summary>
         public string FirstName { get; set; } = string.Empty;
+        /// <summary>
+        /// Family name.
+        /// </summary>
 
         [Required(ErrorMessage = "Last name is required.")]
         [StringLength(
@@ -45,19 +48,16 @@ namespace BrightSmileDEntal.DTOs.Auth
             MinimumLength = 2,
             ErrorMessage = "Last name must contain between 2 and 100 characters."
         )]
-        /// <summary>
-        /// Family name.
-        /// </summary>
         public string LastName { get; set; } = string.Empty;
+        /// <summary>
+        /// Contact phone number.
+        /// </summary>
 
         [Phone(ErrorMessage = "Enter a valid phone number.")]
         [StringLength(
             20,
             ErrorMessage = "Phone number cannot exceed 20 characters."
         )]
-        /// <summary>
-        /// Contact phone number.
-        /// </summary>
         public string PhoneNumber { get; set; } = string.Empty;
 
         /// <summary>
@@ -65,14 +65,14 @@ namespace BrightSmileDEntal.DTOs.Auth
         /// </summary>
         [DataType(DataType.Date)]
         public DateTime? DateOfBirth { get; set; }
+        /// <summary>
+        /// Gender, if provided.
+        /// </summary>
 
         [StringLength(
             30,
             ErrorMessage = "Gender cannot exceed 30 characters."
         )]
-        /// <summary>
-        /// Gender, if provided.
-        /// </summary>
         public string Gender { get; set; } = string.Empty;
     }
 }
