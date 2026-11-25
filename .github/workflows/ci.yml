@@ -17,7 +17,7 @@ jobs:
       - run: dotnet restore BrightSmileDEntal.slnx
       - run: dotnet build BrightSmileDEntal.slnx --configuration Release --no-restore
       - run: dotnet publish BrightSmileDEntal/BrightSmileDEntal.csproj --configuration Release --no-build --output publish
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dotnet-build
           path: publish/
