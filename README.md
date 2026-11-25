@@ -6,7 +6,7 @@ A role-based REST API for a dental practice management system. BrightSmile Denta
 
 > **Project status:** Live in production. The ASP.NET Core API runs on Render and serves the Angular frontend hosted on Netlify. BrightSmile Dental is a full-stack portfolio project that continues to receive feature updates and improvements.
 
-**[Live Angular frontend](https://brightsmiledentalfrontend.netlify.app/)** · **[System architecture](docs/ARCHITECTURE.md)** · **[Frontend repository](https://github.com/AriesMaster/BrightSmileDentalFrontEnd)** · **[Portfolio](https://thabo.netlify.app/)**
+**[Live Angular frontend](https://brightsmiledentalfrontend.netlify.app/)** · **[System architecture](docs/ARCHITECTURE.md)** · **[Frontend repository](https://github.com/AriesMaster/BrightSmileDentalFrontEnd)** · **[Portfolio case study](https://thabo.netlify.app/brightsmile.html)**
 
 ## Technical stack
 
